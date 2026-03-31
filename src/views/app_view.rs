@@ -129,11 +129,12 @@ impl AppView {
                         .child(Input::new(&add_url_input))
                         .child(Input::new(&add_dest_input)),
                 )
-                .footer(
-                    h_flex()
-                        .gap_2()
-                        .justify_end()
-                        .child(
+                .footer({
+                    let app_state = app_state.clone();
+                    let add_url_input = add_url_input.clone();
+                    let add_dest_input = add_dest_input.clone();
+                    move |_, _, _, _| {
+                        vec![
                             Button::new("submit-add-task")
                                 .custom(primary_style)
                                 .label("Add")
@@ -187,15 +188,16 @@ impl AppView {
                                             }
                                         }
                                     }
-                                }),
-                        )
-                        .child(
+                                })
+                                .into_any_element(),
                             Button::new("cancel-add-task")
                                 .custom(secondary_style)
                                 .label("Cancel")
-                                .on_click(|_, window, cx| window.close_dialog(cx)),
-                        ),
-                )
+                                .on_click(|_, window, cx| window.close_dialog(cx))
+                                .into_any_element(),
+                        ]
+                    }
+                })
         });
     }
 
@@ -292,12 +294,7 @@ impl AppView {
                 .justify_center()
                 .gap_4()
                 .text_color(cx.theme().foreground)
-                .child(
-                    div()
-                        .text_2xl()
-                        .font_semibold()
-                        .child("还没有下载任务"),
-                )
+                .child(div().text_2xl().font_semibold().child("还没有下载任务"))
                 .child(
                     div()
                         .text_sm()
@@ -346,15 +343,13 @@ impl AppView {
                                 v_flex()
                                     .gap_1()
                                     .child(
-                                        div()
-                                            .font_semibold()
-                                            .child(
-                                                task.url
-                                                    .split('/')
-                                                    .next_back()
-                                                    .unwrap_or(task.url.as_str())
-                                                    .to_string(),
-                                            ),
+                                        div().font_semibold().child(
+                                            task.url
+                                                .split('/')
+                                                .next_back()
+                                                .unwrap_or(task.url.as_str())
+                                                .to_string(),
+                                        ),
                                     )
                                     .child(
                                         div()
@@ -365,27 +360,24 @@ impl AppView {
                             )
                             .child(status_badge(task.status, cx)),
                     )
-                    .child(
-                        Progress::new(format!("progress-{}", task.id))
-                            .value(progress_percent(&task)),
-                    )
+                    .child(Progress::new().value(progress_percent(&task)))
                     .child(format!(
                         "{} / {}  ·  {} /s",
                         format_bytes(task.downloaded),
                         format_bytes(task.total_size),
                         format_bytes(task.speed),
                     ))
-                        .child(
-                            div()
-                                .text_sm()
-                                .text_color(muted_text_color(cx))
-                                .child(format!("保存到 {}", task.dest.display())),
-                        )
+                    .child(
+                        div()
+                            .text_sm()
+                            .text_color(muted_text_color(cx))
+                            .child(format!("保存到 {}", task.dest.display())),
+                    )
                     .child(
                         h_flex()
                             .gap_2()
                             .child(
-                                Button::new(format!("primary-{}", task.id))
+                                Button::new(SharedString::from(format!("primary-{}", task.id)))
                                     .custom(button_style(primary_color(cx), white(), cx))
                                     .label(match task.status {
                                         TaskStatus::Downloading => "暂停",
@@ -405,7 +397,7 @@ impl AppView {
                                     })),
                             )
                             .child(
-                                Button::new(format!("cancel-{}", task.id))
+                                Button::new(SharedString::from(format!("cancel-{}", task.id)))
                                     .custom(button_style(panel_color(cx), text_color(cx), cx))
                                     .label("取消")
                                     .on_click(cx.listener({
@@ -421,7 +413,7 @@ impl AppView {
                                     })),
                             )
                             .child(
-                                Button::new(format!("remove-{}", task.id))
+                                Button::new(SharedString::from(format!("remove-{}", task.id)))
                                     .custom(button_style(panel_color(cx), text_color(cx), cx))
                                     .label("移除")
                                     .on_click(cx.listener({
@@ -466,15 +458,13 @@ impl AppView {
                         .bg(card_color(cx))
                         .text_color(text_color(cx))
                         .child(
-                            div()
-                                .font_semibold()
-                                .child(
-                                    item.url
-                                        .split('/')
-                                        .next_back()
-                                        .unwrap_or(item.url.as_str())
-                                        .to_string(),
-                                ),
+                            div().font_semibold().child(
+                                item.url
+                                    .split('/')
+                                    .next_back()
+                                    .unwrap_or(item.url.as_str())
+                                    .to_string(),
+                            ),
                         )
                         .child(
                             div()
@@ -495,7 +485,7 @@ impl AppView {
                             item.duration
                         ))
                         .child(
-                            Button::new(format!("history-remove-{}", id))
+                            Button::new(SharedString::from(format!("history-remove-{}", id)))
                                 .custom(button_style(panel_color(cx), text_color(cx), cx))
                                 .label("删除")
                                 .on_click(cx.listener(move |view, _, window, cx| {
@@ -586,11 +576,7 @@ impl AppView {
         v_flex()
             .gap_3()
             .text_color(text_color(cx))
-            .child(
-                div()
-                    .font_semibold()
-                    .child("下载设置"),
-            )
+            .child(div().font_semibold().child("下载设置"))
             .child(
                 div()
                     .text_sm()
@@ -677,7 +663,10 @@ impl Render for AppView {
                 state.status_message.clone(),
             )
         });
-        let stats = ViewStats::from_state(&tasks, self.app_state.read(cx).history.completed_tasks.len());
+        let stats = ViewStats::from_state(
+            &tasks,
+            self.app_state.read(cx).history.completed_tasks.len(),
+        );
 
         let content = match current_view {
             ViewKind::AllTasks | ViewKind::Downloading | ViewKind::Completed => self
@@ -781,7 +770,7 @@ impl Render for AppView {
                     ))
                     .child(nav_item(
                         "Downloading",
-                        IconName::HardDrive,
+                        IconName::ArrowDown,
                         current_view == ViewKind::Downloading,
                         cx.listener(|view, _, window, cx| {
                             view.set_view(ViewKind::Downloading, window, cx);
@@ -896,40 +885,29 @@ impl Render for AppView {
                                         .child(
                                             v_flex()
                                                 .gap_1()
-                                                .child(
-                                                    div()
-                                                        .font_semibold()
-                                                        .child("YuShi"),
-                                                )
-                                                .child(
-                                                    div()
-                                                        .text_xs()
-                                                        .text_color(muted_text_color(cx))
-                                                        .child("Rust Desktop Downloader"),
-                                                ),
+                                                .child(div().font_semibold().child("YuShi")),
                                         ),
                                 )
-                                .child(h_flex().gap_2().items_center().child(
-                                    Button::new("new-task")
-                                        .custom(button_style(primary_color(cx), white(), cx))
-                                        .label("新建任务")
-                                        .on_click(cx.listener(|view, _, window, cx| {
-                                            view.open_add_task_dialog(window, cx);
-                                        })),
-                                )),
+                                .child(
+                                    h_flex().gap_2().items_center().child(
+                                        Button::new("new-task")
+                                            .custom(button_style(primary_color(cx), white(), cx))
+                                            .label("新建任务")
+                                            .on_click(cx.listener(|view, _, window, cx| {
+                                                view.open_add_task_dialog(window, cx);
+                                            })),
+                                    ),
+                                ),
                         ),
                     )
                     .child(
-                        h_flex()
-                            .size_full()
-                            .child(sidebar)
-                            .child(
-                                v_flex()
-                                    .size_full()
-                                    .gap_3()
-                                    .child(summary_row)
-                                    .child(content_panel),
-                            ),
+                        h_flex().size_full().child(sidebar).child(
+                            v_flex()
+                                .size_full()
+                                .gap_3()
+                                .child(summary_row)
+                                .child(content_panel),
+                        ),
                     ),
             )
             .children(Root::render_dialog_layer(window, cx))
@@ -1008,7 +986,7 @@ fn nav_item(
     on_click: impl Fn(&ClickEvent, &mut Window, &mut App) + 'static,
     cx: &App,
 ) -> impl IntoElement {
-    Button::new(format!("nav-{label}"))
+    Button::new(SharedString::from(format!("nav-{label}")))
         .custom(button_style(
             if active {
                 primary_color(cx).opacity(0.16)
@@ -1042,9 +1020,7 @@ impl ViewStats {
             total_tasks: tasks.len(),
             active_tasks: tasks
                 .iter()
-                .filter(|task| {
-                    matches!(task.status, TaskStatus::Pending | TaskStatus::Downloading)
-                })
+                .filter(|task| matches!(task.status, TaskStatus::Pending | TaskStatus::Downloading))
                 .count(),
             completed_tasks: tasks
                 .iter()
