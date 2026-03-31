@@ -1,11 +1,12 @@
 use anyhow::Result;
 use crossterm::event::{KeyCode, KeyEvent, KeyModifiers};
-use std::path::PathBuf;
 use tokio::sync::mpsc;
 use yushi_core::{
     DownloadTask, DownloaderEvent, Priority, ProgressEvent, QueueEvent, TaskEvent, TaskStatus,
     YuShi,
 };
+
+use crate::config::{ConfigStore, default_output_for_url};
 
 #[derive(Debug, Clone, Copy, PartialEq, Eq)]
 pub enum InputMode {
@@ -31,8 +32,9 @@ pub struct App {
 }
 
 impl App {
-    pub async fn new(queue_path: PathBuf) -> Result<Self> {
-        let (queue, event_rx) = YuShi::new(4, 2, queue_path);
+    pub async fn new() -> Result<Self> {
+        let config = ConfigStore::load().await?;
+        let (queue, event_rx) = ConfigStore::build_queue(&config, None, None).await?;
         queue.load_queue_from_state().await?;
         let tasks = queue.get_all_tasks().await;
 
@@ -185,15 +187,10 @@ impl App {
 
         let url = parts[0].trim().to_string();
         let output = if parts.len() > 1 {
-            PathBuf::from(parts[1].trim())
+            std::path::PathBuf::from(parts[1].trim())
         } else {
-            // 从 URL 提取文件名
-            let filename = url
-                .split('/')
-                .next_back()
-                .and_then(|s| s.split('?').next())
-                .unwrap_or("download");
-            PathBuf::from(filename)
+            let config = ConfigStore::load().await?;
+            default_output_for_url(&config, &url)
         };
 
         let priority = if parts.len() > 2 {

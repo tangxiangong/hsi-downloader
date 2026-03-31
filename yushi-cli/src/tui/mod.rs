@@ -14,7 +14,7 @@ use crossterm::{
 use ratatui::{Terminal, backend::CrosstermBackend};
 use std::io;
 
-pub async fn run(queue_path: std::path::PathBuf) -> Result<()> {
+pub async fn run() -> Result<()> {
     // 设置终端
     enable_raw_mode()?;
     let mut stdout = io::stdout();
@@ -23,7 +23,7 @@ pub async fn run(queue_path: std::path::PathBuf) -> Result<()> {
     let mut terminal = Terminal::new(backend)?;
 
     // 创建应用
-    let mut app = App::new(queue_path).await?;
+    let mut app = App::new().await?;
     let mut event_handler = EventHandler::new(250);
 
     // 运行主循环

@@ -18,8 +18,7 @@ async fn main() -> Result<()> {
         cli::Commands::Config(args) => commands::config::execute(args).await?,
         #[cfg(feature = "tui")]
         cli::Commands::Tui => {
-            let queue_path = config::Config::queue_state_path()?;
-            tui::run(queue_path).await?;
+            tui::run().await?;
         }
     }
 

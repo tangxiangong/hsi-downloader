@@ -1,58 +1,113 @@
-use anyhow::{Result, anyhow};
-use serde::{Deserialize, Serialize};
-use std::path::PathBuf;
+use anyhow::{Context, Result};
+use std::path::{Path, PathBuf};
+use yushi_core::{
+    AppConfig, CompletedTask, DownloadHistory, DownloaderEvent, TaskStatus, YuShi, config_path,
+    history_path, queue_state_path,
+};
 
-#[derive(Debug, Serialize, Deserialize, Clone)]
-pub struct Config {
-    pub default_connections: usize,
-    pub default_max_tasks: usize,
-    pub default_output_dir: PathBuf,
-    pub user_agent: Option<String>,
-    pub proxy: Option<String>,
-    pub speed_limit: Option<String>,
-}
+pub struct ConfigStore;
 
-impl Default for Config {
-    fn default() -> Self {
-        Self {
-            default_connections: 4,
-            default_max_tasks: 2,
-            default_output_dir: PathBuf::from("downloads"),
-            user_agent: Some("YuShi/1.0".to_string()),
-            proxy: None,
-            speed_limit: None,
+impl ConfigStore {
+    pub async fn load() -> Result<AppConfig> {
+        let path = config_path().context("unable to resolve shared config path")?;
+        let mut config = AppConfig::load(&path).await?;
+
+        if !config.default_download_path.is_absolute() {
+            config.default_download_path = make_absolute(&config.default_download_path)?;
         }
-    }
-}
+        // Normalize persisted config into the shared schema after compatibility loading.
+        config.save(&path).await?;
 
-impl Config {
-    pub fn load() -> Result<Self> {
-        let config_path = Self::config_path()?;
-        if config_path.exists() {
-            let content = std::fs::read_to_string(&config_path)?;
-            Ok(serde_json::from_str(&content)?)
-        } else {
-            Ok(Self::default())
-        }
+        Ok(config)
     }
 
-    pub fn save(&self) -> Result<()> {
-        let config_path = Self::config_path()?;
-        if let Some(parent) = config_path.parent() {
-            std::fs::create_dir_all(parent)?;
-        }
-        let content = serde_json::to_string_pretty(self)?;
-        std::fs::write(&config_path, content)?;
+    pub async fn save(config: &AppConfig) -> Result<()> {
+        let path = config_path().context("unable to resolve shared config path")?;
+        config.save(&path).await?;
         Ok(())
     }
 
     pub fn config_path() -> Result<PathBuf> {
-        let config_dir = dirs::config_dir().ok_or_else(|| anyhow!("无法获取配置目录"))?;
-        Ok(config_dir.join("yushi").join("config.json"))
+        config_path().context("unable to resolve shared config path")
+    }
+
+    pub fn history_path() -> Result<PathBuf> {
+        history_path().context("unable to resolve shared history path")
     }
 
     pub fn queue_state_path() -> Result<PathBuf> {
-        let config_dir = dirs::config_dir().ok_or_else(|| anyhow!("无法获取配置目录"))?;
-        Ok(config_dir.join("yushi").join("queue.json"))
+        queue_state_path().context("unable to resolve shared queue path")
     }
+
+    pub async fn build_queue(
+        config: &AppConfig,
+        connections: Option<usize>,
+        max_tasks: Option<usize>,
+    ) -> Result<(YuShi, tokio::sync::mpsc::Receiver<DownloaderEvent>)> {
+        let mut downloader_config = config.downloader_config();
+        if let Some(connections) = connections {
+            downloader_config.max_concurrent = connections;
+        }
+
+        let queue_path = queue_state_path().context("unable to resolve shared queue path")?;
+        let mut queue = YuShi::with_config(
+            downloader_config,
+            max_tasks.unwrap_or(config.max_concurrent_tasks),
+            queue_path,
+        );
+
+        install_history_tracking(&mut queue.0);
+        Ok(queue)
+    }
+}
+
+fn install_history_tracking(queue: &mut YuShi) {
+    let queue_for_history = queue.clone();
+    queue.set_on_complete(move |task_id, result| {
+        let queue = queue_for_history.clone();
+        async move {
+            if result.is_err() {
+                return;
+            }
+
+            let Some(task) = queue.get_task(&task_id).await else {
+                return;
+            };
+            if task.status != TaskStatus::Completed {
+                return;
+            }
+            let Some(completed_task) = CompletedTask::from_task(&task) else {
+                return;
+            };
+
+            let Ok(path) = history_path() else {
+                return;
+            };
+            let Ok(mut history) = DownloadHistory::load(&path).await else {
+                return;
+            };
+
+            history.add_completed(completed_task);
+            let _ = history.save(&path).await;
+        }
+    });
+}
+
+pub fn default_output_for_url(config: &AppConfig, url: &str) -> PathBuf {
+    let filename = url
+        .split('/')
+        .next_back()
+        .and_then(|segment| segment.split('?').next())
+        .filter(|segment| !segment.is_empty())
+        .unwrap_or("download");
+
+    config.default_download_path.join(filename)
+}
+
+fn make_absolute(path: &Path) -> Result<PathBuf> {
+    if path.is_absolute() {
+        return Ok(path.to_path_buf());
+    }
+
+    Ok(std::env::current_dir()?.join(path))
 }

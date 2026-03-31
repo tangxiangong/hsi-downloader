@@ -2,6 +2,8 @@
 pub enum Error {
     #[error("{0}")]
     IOError(String),
+    #[error("Configuration error: {0}")]
+    ConfigError(String),
     #[error("{0}")]
     TaskFailed(String),
     #[error("Task was cancelled")]
@@ -22,6 +24,8 @@ pub enum Error {
     ChecksumVerificationFailed,
     #[error("Cannot remove task in current status")]
     CannotRemoveTaskInCurrentStatus,
+    #[error("Storage path error: {0}")]
+    PathError(String),
     #[error("Unknown error")]
     Unknown,
 }

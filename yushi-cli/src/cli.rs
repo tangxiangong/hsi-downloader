@@ -34,8 +34,8 @@ pub struct DownloadArgs {
     pub output: Option<PathBuf>,
 
     /// 并发连接数
-    #[arg(short = 'n', long, default_value = "4")]
-    pub connections: usize,
+    #[arg(short = 'n', long)]
+    pub connections: Option<usize>,
 
     /// 速度限制 (例如: 1M, 500K)
     #[arg(short = 'l', long)]
@@ -96,11 +96,11 @@ pub enum QueueCommands {
     /// 启动队列处理
     Start {
         /// 最大并发任务数
-        #[arg(short = 'n', long, default_value = "2")]
-        max_tasks: usize,
+        #[arg(short = 'n', long)]
+        max_tasks: Option<usize>,
         /// 每个任务的并发连接数
-        #[arg(short = 'c', long, default_value = "4")]
-        connections: usize,
+        #[arg(short = 'c', long)]
+        connections: Option<usize>,
     },
     /// 暂停任务
     Pause {
