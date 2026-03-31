@@ -1,12 +1,13 @@
 use crate::{
-    app_state::{AppState, ViewKind, default_destination},
+    app_state::{AppState, ViewKind},
+    components::add_task::{AddTaskDraft, parse_optional_speed_limit},
     components::task_item::progress_percent,
     views::{history::search_history, settings::sanitize_theme, task_list::filter_tasks},
 };
 use anyhow::Result;
 use gpui::*;
 use gpui_component::{
-    ActiveTheme as _, IconName, Root, Selectable, StyledExt, TitleBar, WindowExt,
+    ActiveTheme as _, IconName, Root, Selectable, StyledExt, Theme, ThemeMode, TitleBar, WindowExt,
     button::*,
     h_flex,
     input::{Input, InputState},
@@ -14,13 +15,13 @@ use gpui_component::{
     v_flex,
 };
 use std::path::PathBuf;
-use tokio::{runtime::Handle, task::block_in_place};
 use yushi_core::{AppConfig, DownloadTask, TaskStatus};
 
 pub struct AppView {
     app_state: Entity<AppState>,
     add_url_input: Entity<InputState>,
     add_dest_input: Entity<InputState>,
+    add_speed_input: Entity<InputState>,
     history_search_input: Entity<InputState>,
     settings_path_input: Entity<InputState>,
     settings_downloads_input: Entity<InputState>,
@@ -28,6 +29,8 @@ pub struct AppView {
     settings_chunk_input: Entity<InputState>,
     settings_timeout_input: Entity<InputState>,
     settings_user_agent_input: Entity<InputState>,
+    settings_proxy_input: Entity<InputState>,
+    settings_speed_limit_input: Entity<InputState>,
     theme_choice: String,
 }
 
@@ -42,6 +45,8 @@ impl AppView {
             add_dest_input: cx.new(|cx| {
                 InputState::new(window, cx).placeholder("Leave empty to use default path")
             }),
+            add_speed_input: cx
+                .new(|cx| InputState::new(window, cx).placeholder("Optional speed limit, e.g. 2M")),
             history_search_input: cx
                 .new(|cx| InputState::new(window, cx).placeholder("Search URL or file path")),
             settings_path_input: cx.new(|cx| {
@@ -61,12 +66,19 @@ impl AppView {
                 .new(|cx| InputState::new(window, cx).default_value(config.timeout.to_string())),
             settings_user_agent_input: cx
                 .new(|cx| InputState::new(window, cx).default_value(config.user_agent.clone())),
+            settings_proxy_input: cx.new(|cx| {
+                InputState::new(window, cx).default_value(config.proxy.unwrap_or_default())
+            }),
+            settings_speed_limit_input: cx.new(|cx| {
+                InputState::new(window, cx).default_value(
+                    config
+                        .speed_limit
+                        .map(|limit| limit.to_string())
+                        .unwrap_or_default(),
+                )
+            }),
             theme_choice: config.theme,
         }
-    }
-
-    fn run_async<T>(&self, future: impl std::future::Future<Output = Result<T>>) -> Result<T> {
-        block_in_place(|| Handle::current().block_on(future))
     }
 
     fn set_view(&mut self, view: ViewKind, window: &mut Window, cx: &mut Context<Self>) {
@@ -104,7 +116,28 @@ impl AppView {
         self.settings_user_agent_input.update(cx, |input, cx| {
             input.set_value(config.user_agent.clone(), window, cx)
         });
+        self.settings_proxy_input.update(cx, |input, cx| {
+            input.set_value(config.proxy.unwrap_or_default(), window, cx)
+        });
+        self.settings_speed_limit_input.update(cx, |input, cx| {
+            input.set_value(
+                config
+                    .speed_limit
+                    .map(|limit| limit.to_string())
+                    .unwrap_or_default(),
+                window,
+                cx,
+            )
+        });
         self.theme_choice = config.theme;
+    }
+
+    fn apply_theme(theme: &str, window: &mut Window, cx: &mut App) {
+        match theme {
+            "dark" => Theme::change(ThemeMode::Dark, Some(window), cx),
+            "light" => Theme::change(ThemeMode::Light, Some(window), cx),
+            _ => Theme::sync_system_appearance(Some(window), cx),
+        }
     }
 
     fn open_add_task_dialog(&mut self, window: &mut Window, cx: &mut Context<Self>) {
@@ -112,10 +145,13 @@ impl AppView {
             .update(cx, |input, cx| input.set_value("", window, cx));
         self.add_dest_input
             .update(cx, |input, cx| input.set_value("", window, cx));
+        self.add_speed_input
+            .update(cx, |input, cx| input.set_value("", window, cx));
 
         let app_state = self.app_state.clone();
         let add_url_input = self.add_url_input.clone();
         let add_dest_input = self.add_dest_input.clone();
+        let add_speed_input = self.add_speed_input.clone();
         let primary_style = button_style(primary_color(cx), white(), cx);
         let secondary_style = button_style(panel_color(cx), text_color(cx), cx);
 
@@ -127,14 +163,12 @@ impl AppView {
                         .gap_3()
                         .child("Use the default download directory by leaving destination blank.")
                         .child(Input::new(&add_url_input))
-                        .child(Input::new(&add_dest_input)),
+                        .child(Input::new(&add_dest_input))
+                        .child(Input::new(&add_speed_input)),
                 )
-                .footer({
-                    let app_state = app_state.clone();
-                    let add_url_input = add_url_input.clone();
-                    let add_dest_input = add_dest_input.clone();
-                    move |_, _, _, _| {
-                        vec![
+                .footer(
+                    div()
+                        .child(
                             Button::new("submit-add-task")
                                 .custom(primary_style)
                                 .label("Add")
@@ -142,62 +176,85 @@ impl AppView {
                                     let app_state = app_state.clone();
                                     let add_url_input = add_url_input.clone();
                                     let add_dest_input = add_dest_input.clone();
+                                    let add_speed_input = add_speed_input.clone();
                                     move |_, window, cx| {
-                                        let url = add_url_input.read(cx).value().to_string();
-                                        let dest_value =
-                                            add_dest_input.read(cx).value().to_string();
-
-                                        if url.trim().is_empty() {
-                                            window.push_notification("URL is required", cx);
-                                            return;
-                                        }
+                                        let draft = match AddTaskDraft::parse(
+                                            &add_url_input.read(cx).value(),
+                                            &add_dest_input.read(cx).value(),
+                                            &add_speed_input.read(cx).value(),
+                                        ) {
+                                            Ok(draft) => draft,
+                                            Err(err) => {
+                                                window.push_notification(err.to_string(), cx);
+                                                return;
+                                            }
+                                        };
 
                                         let (queue, config) = app_state
                                             .read_with(cx, |state, _| {
                                                 (state.queue.clone(), state.config.clone())
                                             });
-                                        let destination = if dest_value.trim().is_empty() {
-                                            default_destination(&config, &url)
-                                        } else {
-                                            PathBuf::from(dest_value)
-                                        };
+                                        let app_state = app_state.clone();
+                                        window
+                                            .spawn(cx, async move |window| {
+                                                let destination = draft
+                                                    .resolve_destination(&queue, &config)
+                                                    .await;
+                                                let url = draft.url.clone();
 
-                                        let result = block_in_place(|| {
-                                            Handle::current().block_on(async {
-                                                queue
-                                                    .add_task(url.clone(), destination.clone())
-                                                    .await?;
-                                                let tasks = queue.get_all_tasks().await;
-                                                Ok::<_, anyhow::Error>(tasks)
+                                                let result = async {
+                                                    queue
+                                                        .add_task_with_options(
+                                                            draft.url.clone(),
+                                                            destination.clone(),
+                                                            yushi_core::TaskPriority::Normal,
+                                                            None,
+                                                            draft.speed_limit,
+                                                            false,
+                                                        )
+                                                        .await?;
+                                                    let tasks = queue.get_all_tasks().await;
+                                                    Ok::<_, anyhow::Error>((tasks, destination))
+                                                }
+                                                .await;
+
+                                                let _ = app_state.update_in(
+                                                    window,
+                                                    move |state, window, cx| match result {
+                                                        Ok((tasks, destination)) => {
+                                                            state.tasks = tasks;
+                                                            state.status_message =
+                                                                Some(format!("Added {}", url));
+                                                            cx.notify();
+                                                            window.close_dialog(cx);
+                                                            window.push_notification(
+                                                                format!(
+                                                                    "Task added: {}",
+                                                                    destination.display()
+                                                                ),
+                                                                cx,
+                                                            );
+                                                        }
+                                                        Err(err) => {
+                                                            window.push_notification(
+                                                                err.to_string(),
+                                                                cx,
+                                                            );
+                                                        }
+                                                    },
+                                                );
                                             })
-                                        });
-
-                                        match result {
-                                            Ok(tasks) => {
-                                                app_state.update(cx, |state, cx| {
-                                                    state.tasks = tasks;
-                                                    state.status_message =
-                                                        Some(format!("Added {}", url));
-                                                    cx.notify();
-                                                });
-                                                window.close_dialog(cx);
-                                                window.push_notification("Task added", cx);
-                                            }
-                                            Err(err) => {
-                                                window.push_notification(err.to_string(), cx)
-                                            }
-                                        }
+                                            .detach();
                                     }
-                                })
-                                .into_any_element(),
+                                }),
+                        )
+                        .child(
                             Button::new("cancel-add-task")
                                 .custom(secondary_style)
                                 .label("Cancel")
-                                .on_click(|_, window, cx| window.close_dialog(cx))
-                                .into_any_element(),
-                        ]
-                    }
-                })
+                                .on_click(|_, window, cx| window.close_dialog(cx)),
+                        ),
+                )
         });
     }
 
@@ -209,28 +266,33 @@ impl AppView {
         cx: &mut Context<Self>,
     ) {
         let queue = self.app_state.read_with(cx, |state, _| state.queue.clone());
-        let task_id_for_async = task_id.clone();
-        let result = self.run_async(async move {
-            match action {
-                TaskAction::Pause => queue.pause_task(task_id_for_async.as_ref()).await?,
-                TaskAction::Resume => queue.resume_task(task_id_for_async.as_ref()).await?,
-                TaskAction::Cancel => queue.cancel_task(task_id_for_async.as_ref()).await?,
-                TaskAction::Remove => queue.remove_task(task_id_for_async.as_ref()).await?,
-            }
+        let task_id_for_async = task_id.to_string();
+        cx.spawn_in(window, async move |view, window| {
+            let result = async {
+                match action {
+                    TaskAction::Pause => queue.pause_task(&task_id_for_async).await?,
+                    TaskAction::Resume => queue.resume_task(&task_id_for_async).await?,
+                    TaskAction::Cancel => queue.cancel_task(&task_id_for_async).await?,
+                    TaskAction::Remove => queue.remove_task(&task_id_for_async).await?,
+                }
 
-            Ok(queue.get_all_tasks().await)
-        });
-
-        match result {
-            Ok(tasks) => {
-                self.app_state.update(cx, |state, cx| {
-                    state.tasks = tasks;
-                    state.status_message = Some(format!("{} {}", action.label(), task_id));
-                    cx.notify();
-                });
+                Ok::<_, anyhow::Error>(queue.get_all_tasks().await)
             }
-            Err(err) => window.push_notification(err.to_string(), cx),
-        }
+            .await;
+
+            let _ = view.update_in(window, move |view, window, cx| match result {
+                Ok(tasks) => {
+                    view.app_state.update(cx, |state, cx| {
+                        state.tasks = tasks;
+                        state.status_message =
+                            Some(format!("{} {}", action.label(), task_id_for_async));
+                        cx.notify();
+                    });
+                }
+                Err(err) => window.push_notification(err.to_string(), cx),
+            });
+        })
+        .detach();
     }
 
     fn save_settings(&mut self, window: &mut Window, cx: &mut Context<Self>) {
@@ -241,30 +303,42 @@ impl AppView {
                 return;
             }
         };
-        let config_path = self
-            .app_state
-            .read_with(cx, |state, _| state.config_path.clone());
-        let save_result = self.run_async({
-            let config = new_config.clone();
-            async move {
-                config.validate()?;
-                config.save(&config_path).await?;
-                Ok(())
-            }
+        let (queue, config_path) = self.app_state.read_with(cx, |state, _| {
+            (state.queue.clone(), state.config_path.clone())
         });
+        let theme = new_config.theme.clone();
 
-        match save_result {
-            Ok(()) => {
-                self.app_state.update(cx, |state, cx| {
-                    state.config = new_config.clone();
-                    state.status_message =
-                        Some("Settings saved. Queue/runtime changes apply on next launch.".into());
-                    cx.notify();
-                });
-                window.push_notification("Settings saved", cx);
+        cx.spawn_in(window, async move |view, window| {
+            let config_for_save = new_config.clone();
+            let result = async {
+                config_for_save.validate()?;
+                config_for_save.save(&config_path).await?;
+                queue
+                    .apply_runtime_config(
+                        config_for_save.downloader_config(),
+                        config_for_save.max_concurrent_tasks,
+                    )
+                    .await?;
+                Ok::<_, anyhow::Error>(())
             }
-            Err(err) => window.push_notification(err.to_string(), cx),
-        }
+            .await;
+
+            let _ = view.update_in(window, move |view, window, cx| match result {
+                Ok(()) => {
+                    view.app_state.update(cx, |state, cx| {
+                        state.config = new_config.clone();
+                        state.status_message = Some(
+                            "Settings saved. New tasks now use the updated runtime config.".into(),
+                        );
+                        cx.notify();
+                    });
+                    Self::apply_theme(&theme, window, cx);
+                    window.push_notification("Settings saved", cx);
+                }
+                Err(err) => window.push_notification(err.to_string(), cx),
+            });
+        })
+        .detach();
     }
 
     fn read_settings(&self, cx: &App) -> Result<AppConfig> {
@@ -277,6 +351,14 @@ impl AppView {
             chunk_size: self.settings_chunk_input.read(cx).value().parse()?,
             timeout: self.settings_timeout_input.read(cx).value().parse()?,
             user_agent: self.settings_user_agent_input.read(cx).value().to_string(),
+            proxy: match self.settings_proxy_input.read(cx).value().trim() {
+                "" => None,
+                value => Some(value.to_string()),
+            },
+            speed_limit: match self.settings_speed_limit_input.read(cx).value().trim() {
+                "" => None,
+                value => parse_optional_speed_limit(value)?,
+            },
             theme: sanitize_theme(&self.theme_choice),
         })
     }
@@ -360,12 +442,18 @@ impl AppView {
                             )
                             .child(status_badge(task.status, cx)),
                     )
-                    .child(Progress::new().value(progress_percent(&task)))
+                    .child(Progress::new("progress").value(progress_percent(&task)))
                     .child(format!(
                         "{} / {}  ·  {} /s",
                         format_bytes(task.downloaded),
                         format_bytes(task.total_size),
                         format_bytes(task.speed),
+                    ))
+                    .child(div().text_sm().text_color(muted_text_color(cx)).child(
+                        match task.speed_limit {
+                            Some(limit) => format!("限速 {}/s", format_bytes(limit)),
+                            None => "不限速".to_string(),
+                        },
                     ))
                     .child(
                         div()
@@ -492,34 +580,40 @@ impl AppView {
                                     let history_path = view
                                         .app_state
                                         .read_with(cx, |state, _| state.history_path.clone());
-                                    let result = view.run_async({
-                                        let id = id.clone();
-                                        async move {
-                                            let mut history =
-                                                yushi_core::DownloadHistory::load(&history_path)
-                                                    .await?;
-                                            let removed = history.remove(&id);
-                                            if removed {
-                                                history.save(&history_path).await?;
-                                            }
-                                            Ok((history, removed))
+                                    let id = id.clone();
+                                    cx.spawn_in(window, async move |view, window| {
+                                        let result = async move {
+                                            let (history, removed) =
+                                                yushi_core::DownloadHistory::remove_from_file(
+                                                    &history_path,
+                                                    &id,
+                                                )
+                                                .await?;
+                                            Ok::<_, anyhow::Error>((history, removed))
                                         }
-                                    });
+                                        .await;
 
-                                    match result {
-                                        Ok((history, true)) => {
-                                            view.app_state.update(cx, |state, cx| {
-                                                state.history = history;
-                                                state.status_message =
-                                                    Some("Removed history item".into());
-                                                cx.notify();
-                                            });
-                                        }
-                                        Ok((_, false)) => {
-                                            window.push_notification("History item not found", cx)
-                                        }
-                                        Err(err) => window.push_notification(err.to_string(), cx),
-                                    }
+                                        let _ = view.update_in(window, move |view, window, cx| {
+                                            match result {
+                                                Ok((history, true)) => {
+                                                    view.app_state.update(cx, |state, cx| {
+                                                        state.history = history;
+                                                        state.status_message =
+                                                            Some("Removed history item".into());
+                                                        cx.notify();
+                                                    });
+                                                }
+                                                Ok((_, false)) => window.push_notification(
+                                                    "History item not found",
+                                                    cx,
+                                                ),
+                                                Err(err) => {
+                                                    window.push_notification(err.to_string(), cx)
+                                                }
+                                            }
+                                        });
+                                    })
+                                    .detach();
                                 })),
                         )
                 }))
@@ -547,24 +641,34 @@ impl AppView {
                                 let history_path = view
                                     .app_state
                                     .read_with(cx, |state, _| state.history_path.clone());
-                                let result = view.run_async(async move {
-                                    let mut history =
-                                        yushi_core::DownloadHistory::load(&history_path).await?;
-                                    history.clear();
-                                    history.save(&history_path).await?;
-                                    Ok(history)
-                                });
-
-                                match result {
-                                    Ok(history) => {
-                                        view.app_state.update(cx, |state, cx| {
-                                            state.history = history;
-                                            state.status_message = Some("Cleared history".into());
-                                            cx.notify();
-                                        });
+                                cx.spawn_in(window, async move |view, window| {
+                                    let result = async move {
+                                        let history =
+                                            yushi_core::DownloadHistory::clear_file(&history_path)
+                                                .await?;
+                                        Ok::<_, anyhow::Error>(history)
                                     }
-                                    Err(err) => window.push_notification(err.to_string(), cx),
-                                }
+                                    .await;
+
+                                    let _ =
+                                        view.update_in(
+                                            window,
+                                            move |view, window, cx| match result {
+                                                Ok(history) => {
+                                                    view.app_state.update(cx, |state, cx| {
+                                                        state.history = history;
+                                                        state.status_message =
+                                                            Some("Cleared history".into());
+                                                        cx.notify();
+                                                    });
+                                                }
+                                                Err(err) => {
+                                                    window.push_notification(err.to_string(), cx)
+                                                }
+                                            },
+                                        );
+                                })
+                                .detach();
                             })),
                     ),
             )
@@ -581,7 +685,7 @@ impl AppView {
                 div()
                     .text_sm()
                     .text_color(muted_text_color(cx))
-                    .child("修改后的配置会保存到共享配置文件，并在下次启动时生效。"),
+                    .child("修改后的配置会立即写回共享配置文件，并应用到新的下载任务。"),
             )
             .child(div().text_sm().child("默认下载目录"))
             .child(Input::new(&self.settings_path_input))
@@ -595,6 +699,10 @@ impl AppView {
             .child(Input::new(&self.settings_timeout_input))
             .child(div().text_sm().child("User-Agent"))
             .child(Input::new(&self.settings_user_agent_input))
+            .child(div().text_sm().child("代理 URL"))
+            .child(Input::new(&self.settings_proxy_input))
+            .child(div().text_sm().child("默认任务限速（支持 1M / 500K）"))
+            .child(Input::new(&self.settings_speed_limit_input))
             .child(
                 h_flex()
                     .gap_2()
@@ -648,7 +756,7 @@ impl AppView {
                 div()
                     .text_sm()
                     .text_color(muted_text_color(cx))
-                    .child("正在运行中的任务队列不会立即重建；新的配置主要影响后续会话。"),
+                    .child("已经在运行的任务不会被中断重建，但新的任务会立刻使用最新配置。"),
             )
             .into_any_element()
     }

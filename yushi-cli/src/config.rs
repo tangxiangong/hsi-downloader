@@ -83,25 +83,9 @@ fn install_history_tracking(queue: &mut YuShi) {
             let Ok(path) = history_path() else {
                 return;
             };
-            let Ok(mut history) = DownloadHistory::load(&path).await else {
-                return;
-            };
-
-            history.add_completed(completed_task);
-            let _ = history.save(&path).await;
+            let _ = DownloadHistory::append_completed_to_file(&path, completed_task).await;
         }
     });
-}
-
-pub fn default_output_for_url(config: &AppConfig, url: &str) -> PathBuf {
-    let filename = url
-        .split('/')
-        .next_back()
-        .and_then(|segment| segment.split('?').next())
-        .filter(|segment| !segment.is_empty())
-        .unwrap_or("download");
-
-    config.default_download_path.join(filename)
 }
 
 fn make_absolute(path: &Path) -> Result<PathBuf> {

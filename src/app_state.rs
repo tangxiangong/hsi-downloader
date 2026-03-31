@@ -83,21 +83,7 @@ fn install_history_tracking(queue: &mut YuShi, history_path: PathBuf) {
                 return;
             };
 
-            let Ok(mut history) = DownloadHistory::load(&history_path).await else {
-                return;
-            };
-            history.add_completed(completed);
-            let _ = history.save(&history_path).await;
+            let _ = DownloadHistory::append_completed_to_file(&history_path, completed).await;
         }
     });
-}
-
-pub fn default_destination(config: &AppConfig, url: &str) -> PathBuf {
-    let file_name = url
-        .split('/')
-        .next_back()
-        .and_then(|segment| segment.split('?').next())
-        .filter(|segment| !segment.is_empty())
-        .unwrap_or("download");
-    config.default_download_path.join(file_name)
 }

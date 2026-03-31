@@ -41,4 +41,4 @@ pub use types::{
     TaskStatus,
     VerificationEvent,
 };
-pub use utils::{SpeedCalculator, auto_rename, verify_file};
+pub use utils::{SpeedCalculator, auto_rename, parse_speed_limit, verify_file};

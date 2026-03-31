@@ -10,20 +10,20 @@ use views::app_view::AppView;
 
 #[tokio::main(flavor = "multi_thread")]
 async fn main() -> Result<()> {
-    let app = Application::new();
+    let app = gpui_platform::application();
 
     app.run(move |cx| {
         gpui_component::init(cx);
 
         cx.spawn(async move |cx| {
             let (state, mut event_rx) = AppState::bootstrap().await?;
-            let app_state = cx.new(|_| state)?;
+            let app_state = cx.new(|_| state);
             let event_state = app_state.clone();
 
             cx.spawn(async move |cx| {
                 while let Some(event) = event_rx.recv().await {
                     let queue: std::sync::Arc<yushi_core::YuShi> =
-                        event_state.read_with(cx, |state, _| state.queue.clone())?;
+                        event_state.read_with(cx, |state, _| state.queue.clone());
                     let tasks = queue.get_all_tasks().await;
                     let refresh_history = matches!(
                         event,
@@ -31,7 +31,7 @@ async fn main() -> Result<()> {
                     );
                     let history = if refresh_history {
                         let history_path: std::path::PathBuf =
-                            event_state.read_with(cx, |state, _| state.history_path.clone())?;
+                            event_state.read_with(cx, |state, _| state.history_path.clone());
                         Some(yushi_core::DownloadHistory::load(&history_path).await?)
                     } else {
                         None
@@ -43,7 +43,7 @@ async fn main() -> Result<()> {
                             state.history = history;
                         }
                         cx.notify();
-                    })?;
+                    });
                 }
 
                 Ok::<_, anyhow::Error>(())

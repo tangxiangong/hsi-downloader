@@ -1,4 +1,4 @@
-use crate::{Result, types::Task};
+use crate::{Result, storage, types::Task};
 use fs_err::tokio as fs;
 use serde::{Deserialize, Serialize};
 use std::path::Path;
@@ -16,11 +16,14 @@ pub(crate) struct ChunkState {
 }
 
 /// 单文件下载状态
-#[derive(Debug, Serialize, Deserialize)]
+#[derive(Debug, Serialize, Deserialize, Clone)]
 pub(crate) struct FileDownloadState {
     pub url: String,
     /// 文件总大小，None 表示未知（流式下载）
     pub total_size: Option<u64>,
+    /// 已下载字节数（流式下载恢复用）
+    #[serde(default)]
+    pub downloaded: u64,
     pub chunks: Vec<ChunkState>,
     /// 是否为流式下载模式
     pub is_streaming: bool,
@@ -30,7 +33,7 @@ impl FileDownloadState {
     /// 保存状态到文件
     pub async fn save(&self, path: &Path) -> Result<()> {
         let data = serde_json::to_string(self)?;
-        fs::write(path, data).await?;
+        storage::atomic_write_string(path, &data).await?;
         Ok(())
     }
 
@@ -80,7 +83,7 @@ impl DownloaderState {
         state.updated_at = current_timestamp();
 
         let data = serde_json::to_string_pretty(&state)?;
-        fs::write(path, data).await?;
+        storage::atomic_write_string(path, &data).await?;
         Ok(())
     }
 

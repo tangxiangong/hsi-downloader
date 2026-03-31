@@ -65,21 +65,6 @@ impl ProgressManager {
     }
 }
 
-pub fn parse_speed_limit(limit: &str) -> Option<u64> {
-    let limit = limit.trim().to_uppercase();
-    let (num_str, unit) = if limit.ends_with('K') {
-        (&limit[..limit.len() - 1], 1024u64)
-    } else if limit.ends_with('M') {
-        (&limit[..limit.len() - 1], 1024u64 * 1024)
-    } else if limit.ends_with('G') {
-        (&limit[..limit.len() - 1], 1024u64 * 1024 * 1024)
-    } else {
-        (limit.as_str(), 1u64)
-    };
-
-    num_str.parse::<u64>().ok().map(|n| n * unit)
-}
-
 pub fn format_size(bytes: u64) -> String {
     XByte::from_bytes(bytes).to_string()
 }

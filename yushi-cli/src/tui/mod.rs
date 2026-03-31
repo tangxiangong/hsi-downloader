@@ -56,6 +56,7 @@ where
             match event {
                 Event::Key(key) => {
                     if !app.handle_key(key).await? {
+                        app.persist_on_exit().await?;
                         return Ok(());
                     }
                 }

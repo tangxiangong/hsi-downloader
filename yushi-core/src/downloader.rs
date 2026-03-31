@@ -5,44 +5,74 @@ use crate::{
         ChecksumType, CompletionCallback, Config, DownloaderEvent, ProgressEvent, Task, TaskEvent,
         TaskPriority, TaskStatus, VerificationEvent,
     },
-    utils::{SpeedCalculator, SpeedLimiter, auto_rename, verify_file},
+    utils::{
+        SpeedCalculator, SpeedLimiter, auto_rename, infer_filename_from_content_disposition,
+        infer_filename_from_url, verify_file,
+    },
 };
 use fs_err::tokio as fs;
 use futures::StreamExt;
 use reqwest::{
     Client, Proxy,
-    header::{CONTENT_LENGTH, RANGE, USER_AGENT},
+    header::{CONTENT_DISPOSITION, CONTENT_LENGTH, RANGE, USER_AGENT},
 };
 use std::{
     collections::HashMap,
     path::{Path, PathBuf},
-    sync::Arc,
-    time::Duration,
+    sync::{
+        Arc,
+        atomic::{AtomicUsize, Ordering},
+    },
+    time::{Duration, Instant},
 };
 use tokio::{
     io::{AsyncSeekExt, AsyncWriteExt, SeekFrom},
-    sync::{RwLock, Semaphore, mpsc},
+    runtime::Handle,
+    sync::{Mutex, RwLock, Semaphore, mpsc},
     task::JoinHandle,
+    task::block_in_place,
 };
 use uuid::Uuid;
 
 #[derive(Clone)]
 pub struct YuShi {
-    client: Client,
-    config: Config,
+    client: Arc<std::sync::RwLock<Client>>,
+    config: Arc<std::sync::RwLock<Config>>,
     tasks: Arc<RwLock<HashMap<String, Task>>>,
     active_downloads: Arc<RwLock<HashMap<String, JoinHandle<()>>>>,
-    max_concurrent_tasks: usize,
+    max_concurrent_tasks: Arc<AtomicUsize>,
     queue_state_path: PathBuf,
+    queue_state_save_tx: mpsc::Sender<QueueStateSaveSignal>,
+    queue_state_write_lock: Arc<Mutex<()>>,
     queue_event_tx: mpsc::Sender<DownloaderEvent>,
     on_complete: Option<CompletionCallback>,
 }
 
+const STATE_SAVE_INTERVAL: Duration = Duration::from_millis(750);
+const STATE_SAVE_BYTES_THRESHOLD: u64 = 512 * 1024;
+const QUEUE_STATE_SAVE_DEBOUNCE: Duration = Duration::from_millis(150);
+const MAX_RETRIES: u32 = 5;
+const MAX_RETRY_BACKOFF: Duration = Duration::from_secs(30);
+
+#[derive(Debug, Clone, Copy)]
+enum QueueStateSaveSignal {
+    Save,
+}
+
 impl std::fmt::Debug for YuShi {
     fn fmt(&self, f: &mut std::fmt::Formatter<'_>) -> std::fmt::Result {
+        let config = self
+            .config
+            .read()
+            .unwrap_or_else(|err| err.into_inner())
+            .clone();
+
         f.debug_struct("YuShi")
-            .field("config", &self.config)
-            .field("max_concurrent_tasks", &self.max_concurrent_tasks)
+            .field("config", &config)
+            .field(
+                "max_concurrent_tasks",
+                &self.max_concurrent_tasks.load(Ordering::Relaxed),
+            )
             .field("queue_state_path", &self.queue_state_path)
             .field("has_on_complete", &self.on_complete.is_some())
             .finish()
@@ -50,6 +80,92 @@ impl std::fmt::Debug for YuShi {
 }
 
 impl YuShi {
+    async fn sync_chunk_state(
+        file: &mut fs::File,
+        state_lock: &Arc<tokio::sync::RwLock<DownloadState>>,
+        state_file: &Path,
+    ) -> Result<()> {
+        // Persist file contents before advancing the resumable state file.
+        file.flush().await?;
+        file.sync_data().await?;
+
+        let state_snapshot = { state_lock.read().await.clone() };
+        state_snapshot.save(state_file).await?;
+        Ok(())
+    }
+
+    fn spawn_queue_state_save_worker(
+        tasks: Arc<RwLock<HashMap<String, Task>>>,
+        queue_state_path: PathBuf,
+        queue_state_write_lock: Arc<Mutex<()>>,
+        mut queue_state_save_rx: mpsc::Receiver<QueueStateSaveSignal>,
+    ) {
+        tokio::spawn(async move {
+            let mut channel_closed = false;
+
+            while !channel_closed {
+                match queue_state_save_rx.recv().await {
+                    Some(QueueStateSaveSignal::Save) => {}
+                    None => break,
+                }
+
+                loop {
+                    match tokio::time::timeout(
+                        QUEUE_STATE_SAVE_DEBOUNCE,
+                        queue_state_save_rx.recv(),
+                    )
+                    .await
+                    {
+                        Ok(Some(QueueStateSaveSignal::Save)) => continue,
+                        Ok(None) => {
+                            channel_closed = true;
+                            break;
+                        }
+                        Err(_) => break,
+                    }
+                }
+
+                let _ = Self::write_queue_state_snapshot_from_tasks(
+                    &tasks,
+                    &queue_state_path,
+                    &queue_state_write_lock,
+                )
+                .await;
+            }
+        });
+    }
+
+    async fn write_queue_state_snapshot_from_tasks(
+        tasks: &Arc<RwLock<HashMap<String, Task>>>,
+        queue_state_path: &Path,
+        queue_state_write_lock: &Arc<Mutex<()>>,
+    ) -> Result<()> {
+        let task_list: Vec<Task> = {
+            let tasks = tasks.read().await;
+            tasks.values().cloned().collect()
+        };
+
+        let state = QueueState {
+            version: "1.0".to_string(),
+            tasks: task_list,
+            created_at: current_timestamp(),
+            updated_at: current_timestamp(),
+        };
+
+        let _guard = queue_state_write_lock.lock().await;
+        state.save(queue_state_path).await?;
+        Ok(())
+    }
+
+    async fn write_queue_state_snapshot(&self) -> Result<()> {
+        Self::write_queue_state_snapshot_from_tasks(
+            &self.tasks,
+            &self.queue_state_path,
+            &self.queue_state_write_lock,
+        )
+        .await
+    }
+
     /// 创建新的下载器实例
     ///
     /// # 参数
@@ -86,30 +202,30 @@ impl YuShi {
         queue_state_path: PathBuf,
     ) -> (Self, mpsc::Receiver<DownloaderEvent>) {
         let (event_tx, event_rx) = mpsc::channel(1024);
-
-        let mut builder = Client::builder()
-            .tcp_keepalive(Duration::from_secs(60))
-            .timeout(Duration::from_secs(config.timeout));
-
-        if let Some(proxy_url) = &config.proxy
-            && let Ok(proxy) = Proxy::all(proxy_url)
-        {
-            builder = builder.proxy(proxy);
-        }
-
-        let client = builder.build().unwrap();
+        let (queue_state_save_tx, queue_state_save_rx) = mpsc::channel(64);
+        let client = Self::build_client(&config).expect("failed to build reqwest client");
+        let tasks = Arc::new(RwLock::new(HashMap::new()));
+        let queue_state_write_lock = Arc::new(Mutex::new(()));
 
         let downloader = Self {
-            client,
-            config,
-            tasks: Arc::new(RwLock::new(HashMap::new())),
+            client: Arc::new(std::sync::RwLock::new(client)),
+            config: Arc::new(std::sync::RwLock::new(config)),
+            tasks: Arc::clone(&tasks),
             active_downloads: Arc::new(RwLock::new(HashMap::new())),
-            max_concurrent_tasks,
-            queue_state_path,
+            max_concurrent_tasks: Arc::new(AtomicUsize::new(max_concurrent_tasks)),
+            queue_state_path: queue_state_path.clone(),
+            queue_state_save_tx,
+            queue_state_write_lock: Arc::clone(&queue_state_write_lock),
             queue_event_tx: event_tx,
             on_complete: None,
         };
 
+        Self::spawn_queue_state_save_worker(
+            tasks,
+            queue_state_path,
+            queue_state_write_lock,
+            queue_state_save_rx,
+        );
         (downloader, event_rx)
     }
 
@@ -122,6 +238,71 @@ impl YuShi {
         self.on_complete = Some(Arc::new(move |task_id, result| {
             Box::pin(callback(task_id, result))
         }));
+    }
+
+    fn build_client(config: &Config) -> std::result::Result<Client, reqwest::Error> {
+        let mut builder = Client::builder()
+            .tcp_keepalive(Duration::from_secs(60))
+            .timeout(Duration::from_secs(config.timeout));
+
+        if let Some(proxy_url) = &config.proxy
+            && let Ok(proxy) = Proxy::all(proxy_url)
+        {
+            builder = builder.proxy(proxy);
+        }
+
+        builder.build()
+    }
+
+    fn runtime_config(&self) -> Config {
+        self.config
+            .read()
+            .unwrap_or_else(|err| err.into_inner())
+            .clone()
+    }
+
+    fn http_client(&self) -> Client {
+        self.client
+            .read()
+            .unwrap_or_else(|err| err.into_inner())
+            .clone()
+    }
+
+    pub async fn apply_runtime_config(
+        &self,
+        config: Config,
+        max_concurrent_tasks: usize,
+    ) -> Result<()> {
+        let client = Self::build_client(&config)?;
+
+        *self.client.write().unwrap_or_else(|err| err.into_inner()) = client;
+        *self.config.write().unwrap_or_else(|err| err.into_inner()) = config;
+        self.max_concurrent_tasks
+            .store(max_concurrent_tasks, Ordering::Relaxed);
+
+        self.process_queue().await?;
+        Ok(())
+    }
+
+    pub async fn infer_destination_in_dir(&self, url: &str, directory: PathBuf) -> PathBuf {
+        let file_name = self
+            .infer_remote_filename(url)
+            .await
+            .or_else(|| infer_filename_from_url(url))
+            .unwrap_or_else(|| "download".to_string());
+
+        directory.join(file_name)
+    }
+
+    async fn infer_remote_filename(&self, url: &str) -> Option<String> {
+        let response = self.http_client().head(url).send().await.ok()?;
+
+        response
+            .headers()
+            .get(CONTENT_DISPOSITION)
+            .and_then(|value| value.to_str().ok())
+            .and_then(infer_filename_from_content_disposition)
+            .or_else(|| infer_filename_from_url(response.url().as_str()))
     }
 
     /// 简单下载文件（单文件下载的便捷方法）
@@ -189,6 +370,7 @@ impl YuShi {
         url: &str,
         dest: &str,
         event_tx: mpsc::Sender<ProgressEvent>,
+        speed_limit: Option<u64>,
     ) -> Result<()> {
         let dest_path = PathBuf::from(dest);
         let state_path = dest_path.with_extension("json");
@@ -211,11 +393,10 @@ impl YuShi {
             .await?;
 
         if is_streaming {
-            // 流式下载
-            self.download_streaming(url, &dest_path, event_tx).await
+            self.download_streaming(state, url, &dest_path, &state_path, event_tx, speed_limit)
+                .await
         } else {
-            // 分块下载
-            self.download_chunked(state, &dest_path, &state_path, event_tx)
+            self.download_chunked(state, &dest_path, &state_path, event_tx, speed_limit)
                 .await
         }
     }
@@ -223,19 +404,28 @@ impl YuShi {
     /// 流式下载（不需要 Content-Length）
     async fn download_streaming(
         &self,
+        state: Arc<tokio::sync::RwLock<DownloadState>>,
         url: &str,
-        dest: &std::path::PathBuf,
+        dest: &Path,
+        state_path: &Path,
         event_tx: mpsc::Sender<ProgressEvent>,
+        speed_limit: Option<u64>,
     ) -> Result<()> {
-        let mut request = self.client.get(url);
+        let client = self.http_client();
+        let config = self.runtime_config();
+        let resume_from = {
+            let state = state.read().await;
+            state.downloaded
+        };
+        let mut request = client.get(url);
 
         // 添加自定义头
-        for (key, value) in &self.config.headers {
+        for (key, value) in &config.headers {
             request = request.header(key, value);
         }
 
         // 添加 User-Agent
-        if let Some(ua) = &self.config.user_agent {
+        if let Some(ua) = &config.user_agent {
             request = request.header(USER_AGENT, ua);
         }
 
@@ -244,13 +434,19 @@ impl YuShi {
             return Err(Error::HttpError(response.status().to_string()));
         }
 
-        let mut file = fs::File::create(dest).await?;
+        let mut file = if resume_from > 0 {
+            let mut options = fs::OpenOptions::new();
+            options.create(true).append(true);
+            options.open(dest).await?
+        } else {
+            fs::File::create(dest).await?
+        };
         let mut stream = response.bytes_stream();
-        let mut downloaded = 0u64;
-        let speed_limiter = self
-            .config
-            .speed_limit
-            .map(|limit| Arc::new(RwLock::new(SpeedLimiter::new(limit))));
+        let mut downloaded = resume_from;
+        let mut unsaved_bytes = 0u64;
+        let mut last_state_save = Instant::now();
+        let speed_limiter =
+            speed_limit.map(|limit| Arc::new(RwLock::new(SpeedLimiter::new(limit))));
 
         while let Some(item) = stream.next().await {
             let chunk_data = item.map_err(|e| Error::StreamError(e.to_string()))?;
@@ -263,12 +459,27 @@ impl YuShi {
                 speed_limiter.write().await.wait(len).await;
             }
 
+            {
+                let mut state = state.write().await;
+                state.downloaded = downloaded;
+            }
+
             let _ = event_tx
                 .send(ProgressEvent::StreamDownloading { downloaded })
                 .await;
+
+            unsaved_bytes += len;
+            if unsaved_bytes >= STATE_SAVE_BYTES_THRESHOLD
+                || last_state_save.elapsed() >= STATE_SAVE_INTERVAL
+            {
+                Self::sync_chunk_state(&mut file, &state, state_path).await?;
+                unsaved_bytes = 0;
+                last_state_save = Instant::now();
+            }
         }
 
-        file.flush().await?;
+        Self::sync_chunk_state(&mut file, &state, state_path).await?;
+        let _ = fs::remove_file(state_path).await;
         event_tx
             .send(ProgressEvent::Finished {
                 task_id: "internal".to_string(),
@@ -284,12 +495,13 @@ impl YuShi {
         dest_path: &Path,
         state_path: &Path,
         event_tx: mpsc::Sender<ProgressEvent>,
+        speed_limit: Option<u64>,
     ) -> Result<()> {
-        let semaphore = Arc::new(Semaphore::new(self.config.max_concurrent));
-        let speed_limiter = self
-            .config
-            .speed_limit
-            .map(|limit| Arc::new(RwLock::new(SpeedLimiter::new(limit))));
+        let config = self.runtime_config();
+        let client = self.http_client();
+        let semaphore = Arc::new(Semaphore::new(config.max_concurrent));
+        let speed_limiter =
+            speed_limit.map(|limit| Arc::new(RwLock::new(SpeedLimiter::new(limit))));
         let mut workers = Vec::new();
 
         let (chunks_count, url) = {
@@ -300,14 +512,14 @@ impl YuShi {
         for i in 0..chunks_count {
             let permit = semaphore.clone().acquire_owned().await?;
             let state_c = Arc::clone(&state);
-            let client_c = self.client.clone();
+            let client_c = client.clone();
             let url_c = url.clone();
             let dest_c = dest_path.to_path_buf();
             let state_file_c = state_path.to_path_buf();
             let tx_c = event_tx.clone();
             let speed_limiter_c = speed_limiter.clone();
-            let headers = self.config.headers.clone();
-            let user_agent = self.config.user_agent.clone();
+            let headers = config.headers.clone();
+            let user_agent = config.user_agent.clone();
 
             workers.push(tokio::spawn(async move {
                 let res = Self::download_chunk(
@@ -355,19 +567,18 @@ impl YuShi {
         headers: std::collections::HashMap<String, String>,
         user_agent: Option<String>,
     ) -> Result<()> {
-        let (start_pos, end_pos) = {
-            let s = state_lock.read().await;
-            let chunk = &s.chunks[index];
-            if chunk.is_finished {
-                return Ok(());
-            }
-            (chunk.current, chunk.end)
-        };
-
         let mut retry_count = 0;
-        const MAX_RETRIES: u32 = 5;
 
         loop {
+            let (start_pos, end_pos) = {
+                let s = state_lock.read().await;
+                let chunk = &s.chunks[index];
+                if chunk.is_finished {
+                    return Ok(());
+                }
+                (chunk.current, chunk.end)
+            };
+
             let mut request = client
                 .get(url)
                 .header(RANGE, format!("bytes={}-{}", start_pos, end_pos));
@@ -391,6 +602,8 @@ impl YuShi {
 
                     let mut stream = resp.bytes_stream();
                     let mut current_idx = start_pos;
+                    let mut unsaved_bytes = 0u64;
+                    let mut last_state_save = Instant::now();
 
                     while let Some(item) = stream.next().await {
                         let chunk_data = item.map_err(|e| Error::StreamError(e.to_string()))?;
@@ -416,27 +629,147 @@ impl YuShi {
                             })
                             .await;
 
-                        // 保存状态
-                        let state = state_lock.read().await;
-                        state.save(state_file).await?;
+                        unsaved_bytes += len;
+                        if unsaved_bytes >= STATE_SAVE_BYTES_THRESHOLD
+                            || last_state_save.elapsed() >= STATE_SAVE_INTERVAL
+                        {
+                            Self::sync_chunk_state(&mut file, &state_lock, state_file).await?;
+                            unsaved_bytes = 0;
+                            last_state_save = Instant::now();
+                        }
                     }
 
-                    let mut s = state_lock.write().await;
-                    s.chunks[index].is_finished = true;
+                    {
+                        let mut s = state_lock.write().await;
+                        s.chunks[index].current = current_idx;
+                        s.chunks[index].is_finished = true;
+                    }
+                    Self::sync_chunk_state(&mut file, &state_lock, state_file).await?;
                     return Ok(());
                 }
-                _ => {
+                Ok(resp) => {
                     retry_count += 1;
                     if retry_count > MAX_RETRIES {
                         return Err(Error::HttpError(format!(
-                            "Chunk {} failed after {} retries",
-                            index, MAX_RETRIES
+                            "Chunk {} failed after {} retries: HTTP {}",
+                            index,
+                            MAX_RETRIES,
+                            resp.status()
                         )));
                     }
-                    tokio::time::sleep(std::time::Duration::from_secs(2)).await;
+                    tokio::time::sleep(retry_delay(retry_count)).await;
+                }
+                Err(err) => {
+                    retry_count += 1;
+                    if retry_count > MAX_RETRIES {
+                        return Err(Error::ReqwestError(format!(
+                            "Chunk {} failed after {} retries: {}",
+                            index, MAX_RETRIES, err
+                        )));
+                    }
+                    tokio::time::sleep(retry_delay(retry_count)).await;
                 }
             }
         }
+    }
+
+    async fn probe_download_capability(&self, url: &str) -> Result<(Option<u64>, bool)> {
+        let client = self.http_client();
+        let config = self.runtime_config();
+        let mut request = client.head(url);
+
+        for (key, value) in &config.headers {
+            request = request.header(key, value);
+        }
+
+        if let Some(ua) = &config.user_agent {
+            request = request.header(USER_AGENT, ua);
+        }
+
+        let response = request.send().await?;
+        let total_size = response
+            .headers()
+            .get(CONTENT_LENGTH)
+            .and_then(|v| v.to_str().ok()?.parse::<u64>().ok());
+        let supports_range = response
+            .headers()
+            .get("accept-ranges")
+            .map(|v| v.to_str().unwrap_or("").contains("bytes"))
+            .unwrap_or(false);
+
+        Ok((total_size, supports_range))
+    }
+
+    async fn existing_downloaded_bytes(dest: &Path, fallback: u64) -> Result<u64> {
+        match fs::metadata(dest).await {
+            Ok(metadata) => Ok(metadata.len()),
+            Err(err) if err.kind() == std::io::ErrorKind::NotFound => Ok(fallback),
+            Err(err) => Err(err.into()),
+        }
+    }
+
+    async fn build_chunked_state(
+        &self,
+        url: &str,
+        dest: &Path,
+        state_path: &Path,
+        total_size: u64,
+        existing_downloaded: u64,
+    ) -> Result<DownloadState> {
+        let config = self.runtime_config();
+        let mut options = fs::OpenOptions::new();
+        options.create(true).write(true);
+        let file = options.open(dest).await?;
+        file.set_len(total_size).await?;
+
+        let resumed_bytes = existing_downloaded.min(total_size);
+        let mut chunks = Vec::new();
+        let mut curr = 0;
+        let mut idx = 0;
+
+        while curr < total_size {
+            let end = (curr + config.chunk_size - 1).min(total_size - 1);
+            let current = resumed_bytes.clamp(curr, end + 1);
+
+            chunks.push(ChunkState {
+                index: idx,
+                start: curr,
+                end,
+                current,
+                is_finished: current > end,
+            });
+
+            curr += config.chunk_size;
+            idx += 1;
+        }
+
+        let state = DownloadState {
+            url: url.to_string(),
+            total_size: Some(total_size),
+            downloaded: resumed_bytes,
+            chunks,
+            is_streaming: false,
+        };
+        state.save(state_path).await?;
+        Ok(state)
+    }
+
+    async fn build_streaming_state(
+        &self,
+        url: &str,
+        state_path: &Path,
+        total_size: Option<u64>,
+        existing_downloaded: u64,
+    ) -> Result<DownloadState> {
+        let state = DownloadState {
+            url: url.to_string(),
+            total_size,
+            downloaded: existing_downloaded,
+            chunks: Vec::new(),
+            is_streaming: true,
+        };
+        state.save(state_path).await?;
+        Ok(state)
     }
 
     /// 获取或创建下载状态
@@ -446,68 +779,44 @@ impl YuShi {
         dest: &Path,
         state_path: &Path,
     ) -> Result<DownloadState> {
-        // 尝试加载已有状态
         if let Some(state) = DownloadState::load(state_path).await?
             && state.url == url
         {
+            if state.is_streaming {
+                let existing_downloaded =
+                    Self::existing_downloaded_bytes(dest, state.downloaded).await?;
+                let (total_size, supports_range) = self.probe_download_capability(url).await?;
+
+                if supports_range && let Some(total_size) = total_size {
+                    return self
+                        .build_chunked_state(url, dest, state_path, total_size, existing_downloaded)
+                        .await;
+                }
+
+                return self
+                    .build_streaming_state(
+                        url,
+                        state_path,
+                        total_size.or(state.total_size),
+                        existing_downloaded,
+                    )
+                    .await;
+            }
+
             return Ok(state);
         }
 
-        // 检查服务器是否支持 Range 请求和 Content-Length
-        let res = self.client.head(url).send().await?;
-        let total_size_opt = res
-            .headers()
-            .get(CONTENT_LENGTH)
-            .and_then(|v| v.to_str().ok()?.parse::<u64>().ok());
+        let existing_downloaded = Self::existing_downloaded_bytes(dest, 0).await?;
+        let (total_size_opt, supports_range) = self.probe_download_capability(url).await?;
 
-        let supports_range = res
-            .headers()
-            .get("accept-ranges")
-            .map(|v| v.to_str().unwrap_or("").contains("bytes"))
-            .unwrap_or(false);
-
-        let use_streaming = total_size_opt.is_none() || !supports_range;
-
-        if use_streaming {
-            // 流式下载模式
-            return Ok(DownloadState {
-                url: url.to_string(),
-                total_size: total_size_opt,
-                chunks: Vec::new(),
-                is_streaming: true,
-            });
+        if supports_range && let Some(total_size) = total_size_opt {
+            return self
+                .build_chunked_state(url, dest, state_path, total_size, existing_downloaded)
+                .await;
         }
 
-        // 分块下载模式
-        let total_size = total_size_opt.unwrap(); // 已经检查过存在
-
-        let file = fs::File::create(dest).await?;
-        file.set_len(total_size).await?;
-
-        let mut chunks = Vec::new();
-        let mut curr = 0;
-        let mut idx = 0;
-        while curr < total_size {
-            let end = (curr + self.config.chunk_size - 1).min(total_size - 1);
-            chunks.push(ChunkState {
-                index: idx,
-                start: curr,
-                end,
-                current: curr,
-                is_finished: false,
-            });
-            curr += self.config.chunk_size;
-            idx += 1;
-        }
-
-        let state = DownloadState {
-            url: url.to_string(),
-            total_size: Some(total_size),
-            chunks,
-            is_streaming: false,
-        };
-        state.save(state_path).await?;
-        Ok(state)
+        self.build_streaming_state(url, state_path, total_size_opt, existing_downloaded)
+            .await
     }
 
     // ==================== 队列管理方法 ====================
@@ -525,17 +834,14 @@ impl YuShi {
 
     /// 保存队列状态
     async fn save_queue_state(&self) -> Result<()> {
-        let tasks = self.tasks.read().await;
-        let task_list: Vec<Task> = tasks.values().cloned().collect();
-
-        let state = QueueState {
-            version: "1.0".to_string(),
-            tasks: task_list,
-            created_at: current_timestamp(),
-            updated_at: current_timestamp(),
-        };
-        state.save(&self.queue_state_path).await?;
+        self.queue_state_save_tx
+            .send(QueueStateSaveSignal::Save)
+            .await?;
         Ok(())
+    }
+
+    pub async fn persist_queue_state(&self) -> Result<()> {
+        self.write_queue_state_snapshot().await
     }
 
     /// 添加下载任务到队列
@@ -547,7 +853,8 @@ impl YuShi {
     /// # 返回
     /// 返回任务 ID
     pub async fn add_task(&self, url: String, dest: PathBuf) -> Result<String> {
-        self.add_task_with_options(url, dest, TaskPriority::Normal, None, false)
+        let speed_limit = self.runtime_config().speed_limit;
+        self.add_task_with_options(url, dest, TaskPriority::Normal, None, speed_limit, false)
             .await
     }
 
@@ -568,8 +875,11 @@ impl YuShi {
         mut dest: PathBuf,
         priority: TaskPriority,
         checksum: Option<ChecksumType>,
+        speed_limit: Option<u64>,
         auto_rename_on_conflict: bool,
     ) -> Result<String> {
+        let speed_limit = speed_limit.or(self.runtime_config().speed_limit);
+
         // 自动重命名
         if auto_rename_on_conflict && dest.exists() {
             dest = auto_rename(&dest);
@@ -594,6 +904,7 @@ impl YuShi {
             eta: None,
             headers: HashMap::new(),
             checksum,
+            speed_limit,
         };
 
         {
@@ -618,7 +929,8 @@ impl YuShi {
     /// 处理队列，启动待处理的任务（按优先级排序）
     async fn process_queue(&self) -> Result<()> {
         let active_count = self.active_downloads.read().await.len();
-        if active_count >= self.max_concurrent_tasks {
+        let max_concurrent_tasks = self.max_concurrent_tasks.load(Ordering::Relaxed);
+        if active_count >= max_concurrent_tasks {
             return Ok(());
         }
 
@@ -634,11 +946,14 @@ impl YuShi {
         // 按优先级排序（高优先级在前）
         pending_tasks.sort_by(|a, b| b.1.cmp(&a.1));
 
-        for (task_id, _) in pending_tasks
-            .iter()
-            .take(self.max_concurrent_tasks - active_count)
-        {
-            self.start_queue_task(task_id).await?;
+        let task_ids: Vec<String> = pending_tasks
+            .into_iter()
+            .take(max_concurrent_tasks - active_count)
+            .map(|(task_id, _)| task_id)
+            .collect();
+
+        for task_id in task_ids {
+            self.start_queue_task(&task_id).await?;
         }
 
         Ok(())
@@ -671,8 +986,9 @@ impl YuShi {
         let active_downloads = Arc::clone(&self.active_downloads);
         let queue_event_tx = self.queue_event_tx.clone();
         let task_id_owned = task_id.to_string();
-        let queue_state_path = self.queue_state_path.clone();
         let on_complete = self.on_complete.clone();
+        // 记录暂停前已下载的字节数，用于断点续传时正确累加进度
+        let initial_downloaded = task.downloaded;
 
         let handle = tokio::spawn(async move {
             let (tx, mut rx) = mpsc::channel(1024);
@@ -683,7 +999,9 @@ impl YuShi {
             // 进度监听器
             tokio::spawn(async move {
                 let mut total = 0u64;
-                let mut downloaded = 0u64;
+                // 本次会话新增的字节数（从 0 开始），用于速度计算
+                // 历史已下载字节通过 initial_downloaded 偏移量补偿
+                let mut session_downloaded = 0u64;
                 let mut speed_calc = SpeedCalculator::new();
 
                 while let Some(event) = rx.recv().await {
@@ -692,33 +1010,39 @@ impl YuShi {
                             if let Some(size) = total_size {
                                 total = size;
                             }
-                            let mut tasks = tasks_clone.write().await;
-                            if let Some(task) = tasks.get_mut(&task_id_clone) {
-                                task.total_size = total_size.unwrap_or(0);
+                            {
+                                let mut tasks = tasks_clone.write().await;
+                                if let Some(task) = tasks.get_mut(&task_id_clone) {
+                                    task.total_size = total_size.unwrap_or(0);
+                                }
                             }
                         }
                         ProgressEvent::ChunkDownloading { delta, .. } => {
-                            downloaded += delta;
+                            session_downloaded += delta;
+                            // 断点续传：加上历史偏移量，得到文件维度的真实进度
+                            let total_downloaded = initial_downloaded + session_downloaded;
 
-                            // 更新速度统计
-                            let speed = speed_calc.update(downloaded);
+                            // 速度统计基于本次会话字节，避免历史字节拉高初始速度
+                            let speed = speed_calc.update(session_downloaded);
                             let eta = if total > 0 {
-                                speed_calc.calculate_eta(downloaded, total)
+                                speed_calc.calculate_eta(total_downloaded, total)
                             } else {
                                 None
                             };
 
-                            let mut tasks = tasks_clone.write().await;
-                            if let Some(task) = tasks.get_mut(&task_id_clone) {
-                                task.downloaded = downloaded;
-                                task.speed = speed;
-                                task.eta = eta;
+                            {
+                                let mut tasks = tasks_clone.write().await;
+                                if let Some(task) = tasks.get_mut(&task_id_clone) {
+                                    task.downloaded = total_downloaded;
+                                    task.speed = speed;
+                                    task.eta = eta;
+                                }
                             }
 
                             let _ = queue_event_tx_clone
                                 .send(DownloaderEvent::Progress(ProgressEvent::Updated {
                                     task_id: task_id_clone.clone(),
-                                    downloaded,
+                                    downloaded: total_downloaded,
                                     total,
                                     speed,
                                     eta,
@@ -728,22 +1052,23 @@ impl YuShi {
                         ProgressEvent::StreamDownloading {
                             downloaded: stream_downloaded,
                         } => {
-                            downloaded = stream_downloaded;
+                            let session_downloaded =
+                                stream_downloaded.saturating_sub(initial_downloaded);
+                            let speed = speed_calc.update(session_downloaded);
 
-                            // 更新速度统计
-                            let speed = speed_calc.update(downloaded);
-
-                            let mut tasks = tasks_clone.write().await;
-                            if let Some(task) = tasks.get_mut(&task_id_clone) {
-                                task.downloaded = downloaded;
-                                task.speed = speed;
-                                task.eta = None; // 流式下载无法预估剩余时间
+                            {
+                                let mut tasks = tasks_clone.write().await;
+                                if let Some(task) = tasks.get_mut(&task_id_clone) {
+                                    task.downloaded = stream_downloaded;
+                                    task.speed = speed;
+                                    task.eta = None; // 流式下载无法预估剩余时间
+                                }
                             }
 
                             let _ = queue_event_tx_clone
                                 .send(DownloaderEvent::Progress(ProgressEvent::Updated {
                                     task_id: task_id_clone.clone(),
-                                    downloaded,
+                                    downloaded: stream_downloaded,
                                     total: 0, // 流式下载时 total 为 0
                                     speed,
                                     eta: None,
@@ -761,7 +1086,7 @@ impl YuShi {
 
             // 执行下载
             let result = downloader
-                .download_internal(&task.url, task.dest.to_str().unwrap(), tx)
+                .download_internal(&task.url, task.dest.to_str().unwrap(), tx, task.speed_limit)
                 .await;
 
             // 文件校验
@@ -806,41 +1131,34 @@ impl YuShi {
                 Err(e) => Err(e.to_string()),
             };
 
-            let mut tasks = tasks.write().await;
-            if let Some(task) = tasks.get_mut(&task_id_owned) {
-                match verify_result {
+            let completion_event = {
+                let mut tasks = tasks.write().await;
+                let Some(task) = tasks.get_mut(&task_id_owned) else {
+                    return;
+                };
+
+                match &verify_result {
                     Ok(_) => {
                         task.status = TaskStatus::Completed;
-                        let _ = queue_event_tx
-                            .send(DownloaderEvent::Task(TaskEvent::Completed {
-                                task_id: task_id_owned.clone(),
-                            }))
-                            .await;
+                        task.error = None;
+                        DownloaderEvent::Task(TaskEvent::Completed {
+                            task_id: task_id_owned.clone(),
+                        })
                     }
-                    Err(e) => {
+                    Err(error) => {
+                        let error_message = error.to_string();
                         task.status = TaskStatus::Failed;
-                        task.error = Some(e.to_string());
-                        let _ = queue_event_tx
-                            .send(DownloaderEvent::Task(TaskEvent::Failed {
-                                task_id: task_id_owned.clone(),
-                                error: e.to_string(),
-                            }))
-                            .await;
+                        task.error = Some(error_message.clone());
+                        DownloaderEvent::Task(TaskEvent::Failed {
+                            task_id: task_id_owned.clone(),
+                            error: error_message,
+                        })
                     }
                 }
-            }
-
-            // 保存状态
-            let task_list: Vec<Task> = tasks.values().cloned().collect();
-            let state = QueueState {
-                version: "1.0".to_string(),
-                tasks: task_list,
-                created_at: current_timestamp(),
-                updated_at: current_timestamp(),
             };
-            if let Ok(data) = serde_json::to_string_pretty(&state) {
-                let _ = fs::write(&queue_state_path, data).await;
-            }
+
+            let _ = queue_event_tx.send(completion_event).await;
+            let _ = downloader.write_queue_state_snapshot().await;
 
             // 调用完成回调
             if let Some(callback) = on_complete {
@@ -849,6 +1167,10 @@ impl YuShi {
 
             // 从活动下载中移除
             active_downloads.write().await.remove(&task_id_owned);
+            let refiller = downloader.clone();
+            block_in_place(move || {
+                let _ = Handle::current().block_on(async move { refiller.process_queue().await });
+            });
         });
 
         self.active_downloads
@@ -882,6 +1204,8 @@ impl YuShi {
                     task_id: task_id.to_string(),
                 }))
                 .await;
+
+            self.process_queue().await?;
         }
 
         Ok(())
@@ -980,5 +1304,73 @@ impl YuShi {
         drop(tasks);
         self.save_queue_state().await?;
         Ok(())
+    }
+}
+
+fn retry_delay(retry_count: u32) -> Duration {
+    let seconds = 2u64.saturating_pow(retry_count.saturating_sub(1));
+    Duration::from_secs(seconds).min(MAX_RETRY_BACKOFF)
+}
+
+#[cfg(test)]
+mod tests {
+    use super::*;
+    use std::time::{SystemTime, UNIX_EPOCH};
+
+    #[test]
+    fn retry_delay_uses_exponential_backoff_with_cap() {
+        assert_eq!(retry_delay(1), Duration::from_secs(1));
+        assert_eq!(retry_delay(2), Duration::from_secs(2));
+        assert_eq!(retry_delay(3), Duration::from_secs(4));
+        assert_eq!(retry_delay(10), MAX_RETRY_BACKOFF);
+    }
+
+    fn temp_file(name: &str) -> PathBuf {
+        let nonce = SystemTime::now()
+            .duration_since(UNIX_EPOCH)
+            .unwrap_or_default()
+            .as_nanos();
+        std::env::temp_dir().join(format!("yushi-core-{name}-{nonce}.bin"))
+    }
+
+    #[tokio::test]
+    async fn chunked_state_reuses_existing_prefix_from_streaming_resume() {
+        let dest = temp_file("chunk-resume");
+        let state_path = dest.with_extension("json");
+        fs::write(&dest, vec![1u8; 250])
+            .await
+            .expect("write partial file");
+
+        let config = Config {
+            chunk_size: 100,
+            ..Default::default()
+        };
+        
+        let (downloader, _) = YuShi::with_config(config, 1, temp_file("queue-state"));
+        let state = downloader
+            .build_chunked_state(
+                "https://example.com/file.bin",
+                &dest,
+                &state_path,
+                1000,
+                250,
+            )
+            .await
+            .expect("build chunked state");
+
+        assert!(!state.is_streaming);
+        assert_eq!(state.downloaded, 250);
+        assert_eq!(state.chunks[0].current, state.chunks[0].end + 1);
+        assert!(state.chunks[0].is_finished);
+        assert_eq!(state.chunks[1].current, state.chunks[1].end + 1);
+        assert!(state.chunks[1].is_finished);
+        assert_eq!(state.chunks[2].current, 250);
+        assert!(!state.chunks[2].is_finished);
+
+        let metadata = fs::metadata(&dest).await.expect("stat resumed file");
+        assert_eq!(metadata.len(), 1000);
+
+        let _ = fs::remove_file(&dest).await;
+        let _ = fs::remove_file(&state_path).await;
     }
 }

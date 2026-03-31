@@ -19,6 +19,7 @@ tokio = { workspace = true, features = ["macros"] }
 yushi-core = { workspace = true }
 
 [features]
+default = ["tui"]
 tui = ["dep:crossterm", "dep:ratatui"]
 
 [[bin]]

@@ -45,7 +45,7 @@ pub struct DownloadArgs {
     #[arg(short = 'A', long)]
     pub user_agent: Option<String>,
 
-    /// HTTP 代理
+    /// 代理 URL，支持 http/https/socks5/socks5h 和 URL 内嵌认证
     #[arg(short = 'x', long)]
     pub proxy: Option<String>,
 
@@ -90,6 +90,9 @@ pub enum QueueCommands {
         /// SHA256 校验和
         #[arg(long)]
         sha256: Option<String>,
+        /// 任务限速 (例如: 1M, 500K)
+        #[arg(short = 'l', long)]
+        speed_limit: Option<String>,
     },
     /// 列出所有任务
     List,

@@ -155,6 +155,113 @@ pub fn auto_rename(path: &Path) -> PathBuf {
     }
 }
 
+pub fn parse_speed_limit(limit: &str) -> Option<u64> {
+    let limit = limit.trim().to_uppercase();
+    if limit.is_empty() {
+        return None;
+    }
+
+    let (num_str, unit) = if limit.ends_with('K') {
+        (&limit[..limit.len() - 1], 1024u64)
+    } else if limit.ends_with('M') {
+        (&limit[..limit.len() - 1], 1024u64 * 1024)
+    } else if limit.ends_with('G') {
+        (&limit[..limit.len() - 1], 1024u64 * 1024 * 1024)
+    } else {
+        (limit.as_str(), 1u64)
+    };
+
+    num_str
+        .parse::<u64>()
+        .ok()
+        .and_then(|n| n.checked_mul(unit))
+        .filter(|n| *n > 0)
+}
+
+/// 从 URL 推断文件名。
+pub fn infer_filename_from_url(url: &str) -> Option<String> {
+    let path = url.split(['?', '#']).next().unwrap_or(url);
+    if path.ends_with('/') {
+        return None;
+    }
+
+    let file_name = path
+        .rsplit('/')
+        .next()
+        .filter(|segment| !segment.is_empty())?;
+
+    sanitize_inferred_filename(file_name)
+}
+
+/// 从 `Content-Disposition` 响应头推断文件名。
+pub fn infer_filename_from_content_disposition(value: &str) -> Option<String> {
+    let mut fallback = None;
+
+    for part in value.split(';').skip(1) {
+        let part = part.trim();
+
+        if let Some(rest) = part.strip_prefix("filename*=") {
+            if let Some(filename) = parse_rfc5987_filename(rest) {
+                return Some(filename);
+            }
+        } else if let Some(rest) = part.strip_prefix("filename=") {
+            fallback = sanitize_inferred_filename(rest.trim_matches('"'));
+        }
+    }
+
+    fallback
+}
+
+fn parse_rfc5987_filename(value: &str) -> Option<String> {
+    let value = value.trim_matches('"');
+    let encoded = value
+        .split_once("''")
+        .map(|(_, encoded)| encoded)
+        .unwrap_or(value);
+
+    let decoded = percent_decode(encoded)?;
+    sanitize_inferred_filename(&decoded)
+}
+
+fn percent_decode(value: &str) -> Option<String> {
+    let bytes = value.as_bytes();
+    let mut decoded = Vec::with_capacity(bytes.len());
+    let mut index = 0;
+
+    while index < bytes.len() {
+        match bytes[index] {
+            b'%' if index + 2 < bytes.len() => {
+                let hex = std::str::from_utf8(&bytes[index + 1..index + 3]).ok()?;
+                let byte = u8::from_str_radix(hex, 16).ok()?;
+                decoded.push(byte);
+                index += 3;
+            }
+            byte => {
+                decoded.push(byte);
+                index += 1;
+            }
+        }
+    }
+
+    String::from_utf8(decoded).ok()
+}
+
+fn sanitize_inferred_filename(value: &str) -> Option<String> {
+    let file_name = value
+        .trim()
+        .trim_matches('"')
+        .rsplit(['/', '\\'])
+        .next()
+        .unwrap_or(value)
+        .trim();
+
+    if file_name.is_empty() || matches!(file_name, "." | "..") {
+        None
+    } else {
+        Some(file_name.to_string())
+    }
+}
+
 #[derive(Debug, Clone, PartialEq)]
 pub struct XByte {
     pub(crate) quotient: u64,
@@ -336,5 +443,40 @@ mod tests {
         let speed = calc.update(1024 * 1024);
         // 速度应该大于 0
         assert!(speed > 0);
+    }
+
+    #[test]
+    fn infers_filename_from_url() {
+        assert_eq!(
+            infer_filename_from_url("https://example.com/files/archive.tar.gz?download=1"),
+            Some("archive.tar.gz".into())
+        );
+        assert_eq!(
+            infer_filename_from_url("https://example.com/downloads/"),
+            None
+        );
+    }
+
+    #[test]
+    fn infers_filename_from_content_disposition() {
+        assert_eq!(
+            infer_filename_from_content_disposition(
+                "attachment; filename*=UTF-8''hello%20world.txt; filename=\"fallback.txt\""
+            ),
+            Some("hello world.txt".into())
+        );
+        assert_eq!(
+            infer_filename_from_content_disposition("attachment; filename=\"report.pdf\""),
+            Some("report.pdf".into())
+        );
+    }
+
+    #[test]
+    fn parses_speed_limits() {
+        assert_eq!(parse_speed_limit("512"), Some(512));
+        assert_eq!(parse_speed_limit("2k"), Some(2 * 1024));
+        assert_eq!(parse_speed_limit("3M"), Some(3 * 1024 * 1024));
+        assert_eq!(parse_speed_limit("0"), None);
+        assert_eq!(parse_speed_limit("wat"), None);
     }
 }

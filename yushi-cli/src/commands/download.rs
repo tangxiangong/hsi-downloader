@@ -1,38 +1,25 @@
 use crate::{
     cli::DownloadArgs,
-    config::{ConfigStore, default_output_for_url},
-    ui::{format_size, parse_speed_limit, print_error, print_info, print_success},
+    config::ConfigStore,
+    ui::{format_size, print_error, print_info, print_success},
 };
 use anyhow::{Result, anyhow};
 use indicatif::{ProgressBar, ProgressStyle};
 use tokio::sync::mpsc;
-use yushi_core::{ChecksumType, ProgressEvent, YuShi};
+use yushi_core::{ChecksumType, ProgressEvent, YuShi, parse_speed_limit};
 
 pub async fn execute(args: DownloadArgs) -> Result<()> {
     let app_config = ConfigStore::load().await?;
-    let output = if let Some(path) = args.output {
-        if path.is_absolute() {
-            path
-        } else {
-            app_config.default_download_path.join(path)
-        }
-    } else {
-        default_output_for_url(&app_config, &args.url)
-    };
-
-    print_info(&format!("下载: {}", args.url));
-    print_info(&format!("保存到: {}", output.display()));
-
     let mut config = app_config.downloader_config();
     if let Some(connections) = args.connections {
         config.max_concurrent = connections;
     }
 
     if let Some(limit_str) = &args.speed_limit {
-        config.speed_limit = parse_speed_limit(limit_str);
-        if let Some(limit) = config.speed_limit {
-            print_info(&format!("速度限制: {}/s", format_size(limit)));
-        }
+        let limit =
+            parse_speed_limit(limit_str).ok_or_else(|| anyhow!("无效的速度限制: {}", limit_str))?;
+        config.speed_limit = Some(limit);
+        print_info(&format!("速度限制: {}/s", format_size(limit)));
     }
 
     if let Some(ua) = &args.user_agent {
@@ -56,7 +43,21 @@ pub async fn execute(args: DownloadArgs) -> Result<()> {
     let queue_state_path = temp_dir.join(format!("yushi_temp_{}.json", std::process::id()));
 
     let (downloader, _) = YuShi::with_config(config, 1, queue_state_path.clone());
+    let output = if let Some(path) = args.output {
+        if path.is_absolute() {
+            path
+        } else {
+            app_config.default_download_path.join(path)
+        }
+    } else {
+        downloader
+            .infer_destination_in_dir(&args.url, app_config.default_download_path.clone())
+            .await
+    };
     let (tx, mut rx) = mpsc::channel(1024);
+
+    print_info(&format!("下载: {}", args.url));
+    print_info(&format!("保存到: {}", output.display()));
 
     let quiet = args.quiet;
     let progress_handle = tokio::spawn(async move {

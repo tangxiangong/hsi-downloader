@@ -130,10 +130,51 @@ impl DownloadHistory {
     }
 
     pub async fn save(&self, path: &Path) -> Result<()> {
+        let _lock = storage::acquire_file_lock(path).await?;
+        self.save_unlocked(path).await
+    }
+
+    async fn save_unlocked(&self, path: &Path) -> Result<()> {
         storage::ensure_parent_dir(path).await?;
         let content = serde_json::to_string_pretty(self)?;
-        fs_err::tokio::write(path, content).await?;
+        storage::atomic_write_string(path, &content).await?;
         Ok(())
+    }
+
+    pub async fn append_completed_to_file(path: &Path, task: CompletedTask) -> Result<Self> {
+        let (history, _) = Self::mutate_file(path, move |history| {
+            history.add_completed(task);
+        })
+        .await?;
+        Ok(history)
+    }
+
+    pub async fn remove_from_file(path: &Path, id: &str) -> Result<(Self, bool)> {
+        Self::mutate_file(path, |history| history.remove(id)).await
+    }
+
+    pub async fn clear_file(path: &Path) -> Result<Self> {
+        let (history, _) = Self::mutate_file(path, |history| history.clear()).await?;
+        Ok(history)
+    }
+
+    async fn mutate_file<R, F>(path: &Path, mutate: F) -> Result<(Self, R)>
+    where
+        F: FnOnce(&mut Self) -> R,
+    {
+        storage::migrate_legacy_file(path).await?;
+        let _lock = storage::acquire_file_lock(path).await?;
+
+        let mut history = if path.exists() {
+            let content = fs_err::tokio::read_to_string(path).await?;
+            serde_json::from_str(&content)?
+        } else {
+            Self::default()
+        };
+
+        let result = mutate(&mut history);
+        history.save_unlocked(path).await?;
+        Ok((history, result))
     }
 }
 
@@ -175,6 +216,36 @@ mod tests {
         let loaded = DownloadHistory::load(&path).await.expect("load history");
 
         assert_eq!(loaded, history);
+        let _ = fs_err::tokio::remove_file(path).await;
+    }
+
+    #[tokio::test]
+    async fn file_mutation_helpers_persist_atomically() {
+        let path = temp_file("history-mutate");
+
+        let history =
+            DownloadHistory::append_completed_to_file(&path, sample_task("one", "/tmp/one.bin"))
+                .await
+                .expect("append history");
+        assert_eq!(history.completed_tasks.len(), 1);
+
+        let (history, removed) = DownloadHistory::remove_from_file(&path, "one")
+            .await
+            .expect("remove history");
+        assert!(removed);
+        assert!(history.completed_tasks.is_empty());
+
+        let history =
+            DownloadHistory::append_completed_to_file(&path, sample_task("two", "/tmp/two.bin"))
+                .await
+                .expect("append second history");
+        assert_eq!(history.completed_tasks.len(), 1);
+
+        let history = DownloadHistory::clear_file(&path)
+            .await
+            .expect("clear history");
+        assert!(history.completed_tasks.is_empty());
+
         let _ = fs_err::tokio::remove_file(path).await;
     }
 

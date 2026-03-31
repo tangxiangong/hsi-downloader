@@ -8,6 +8,7 @@ use console::style;
 use std::path::PathBuf;
 use yushi_core::{
     ChecksumType, DownloaderEvent, Priority, ProgressEvent, TaskEvent, VerificationEvent,
+    parse_speed_limit,
 };
 
 pub async fn execute(args: QueueArgs) -> Result<()> {
@@ -18,7 +19,8 @@ pub async fn execute(args: QueueArgs) -> Result<()> {
             priority,
             md5,
             sha256,
-        } => add_task(url, output, priority, md5, sha256).await,
+            speed_limit,
+        } => add_task(url, output, priority, md5, sha256, speed_limit).await,
         QueueCommands::List => list_tasks().await,
         QueueCommands::Start {
             max_tasks,
@@ -38,6 +40,7 @@ async fn add_task(
     priority_str: String,
     md5: Option<String>,
     sha256: Option<String>,
+    speed_limit: Option<String>,
 ) -> Result<()> {
     let config = ConfigStore::load().await?;
     let output = if output.is_absolute() {
@@ -62,8 +65,22 @@ async fn add_task(
         sha256.map(ChecksumType::Sha256)
     };
 
+    let speed_limit = match speed_limit {
+        Some(limit) => {
+            Some(parse_speed_limit(&limit).ok_or_else(|| anyhow!("无效的速度限制: {}", limit))?)
+        }
+        None => None,
+    };
+
     let task_id = queue
-        .add_task_with_options(url.clone(), output.clone(), priority, checksum, true)
+        .add_task_with_options(
+            url.clone(),
+            output.clone(),
+            priority,
+            checksum,
+            speed_limit,
+            true,
+        )
         .await?;
 
     print_success("任务已添加到队列");
@@ -71,6 +88,9 @@ async fn add_task(
     println!("  URL: {}", url);
     println!("  输出: {}", output.display());
     println!("  优先级: {:?}", priority);
+    if let Some(limit) = speed_limit {
+        println!("  限速: {}/s", format_size(limit));
+    }
 
     Ok(())
 }
@@ -105,6 +125,9 @@ async fn list_tasks() -> Result<()> {
         println!("  URL: {}", task.url);
         println!("  输出: {}", task.dest.display());
         println!("  优先级: {:?}", task.priority);
+        if let Some(limit) = task.speed_limit {
+            println!("  限速: {}/s", format_size(limit));
+        }
 
         if task.total_size > 0 {
             let progress = (task.downloaded as f64 / task.total_size as f64) * 100.0;

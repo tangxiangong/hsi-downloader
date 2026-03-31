@@ -1,5 +1,5 @@
-use crate::storage;
 use crate::{Error, Result, types::Config};
+use crate::{storage, utils::parse_speed_limit};
 use serde::{Deserialize, Serialize};
 use std::path::{Path, PathBuf};
 
@@ -18,6 +18,12 @@ pub struct AppConfig {
     pub timeout: u64,
     /// 用户代理
     pub user_agent: String,
+    /// 默认代理 URL，支持 http/https/socks5/socks5h 及 URL 内嵌认证信息
+    #[serde(default)]
+    pub proxy: Option<String>,
+    /// 默认任务限速（字节/秒）
+    #[serde(default)]
+    pub speed_limit: Option<u64>,
     /// 主题设置 (light, dark, system)
     pub theme: String,
 }
@@ -33,6 +39,8 @@ impl Default for AppConfig {
             chunk_size: 10 * 1024 * 1024,
             timeout: 30,
             user_agent: "YuShi/1.0".to_string(),
+            proxy: None,
+            speed_limit: None,
             theme: "system".to_string(),
         }
     }
@@ -79,6 +87,17 @@ impl AppConfig {
         if self.timeout == 0 {
             return Err(Error::ConfigError("timeout must be greater than 0".into()));
         }
+        if let Some(limit) = self.speed_limit
+            && limit == 0
+        {
+            return Err(Error::ConfigError(
+                "speed_limit must be greater than 0".into(),
+            ));
+        }
+        if let Some(proxy) = &self.proxy {
+            reqwest::Proxy::all(proxy.as_str())
+                .map_err(|err| Error::ConfigError(format!("invalid proxy: {err}")))?;
+        }
         if !matches!(self.theme.as_str(), "light" | "dark" | "system") {
             return Err(Error::ConfigError(
                 "theme must be one of: light, dark, system".into(),
@@ -91,9 +110,9 @@ impl AppConfig {
         Config {
             max_concurrent: self.max_concurrent_downloads,
             chunk_size: self.chunk_size,
-            speed_limit: None,
+            speed_limit: self.speed_limit,
             headers: Default::default(),
-            proxy: None,
+            proxy: self.proxy.clone(),
             timeout: self.timeout,
             user_agent: Some(self.user_agent.clone()),
         }
@@ -114,6 +133,8 @@ struct LegacyCliConfig {
     default_max_tasks: usize,
     default_output_dir: PathBuf,
     user_agent: Option<String>,
+    proxy: Option<String>,
+    speed_limit: Option<String>,
 }
 
 impl From<LegacyCliConfig> for AppConfig {
@@ -125,6 +146,10 @@ impl From<LegacyCliConfig> for AppConfig {
             user_agent: value
                 .user_agent
                 .unwrap_or_else(|| Self::default().user_agent),
+            proxy: value.proxy,
+            speed_limit: value
+                .speed_limit
+                .and_then(|value| parse_speed_limit(&value)),
             ..Self::default()
         }
     }
@@ -157,6 +182,10 @@ mod tests {
         config.max_concurrent_downloads = 1;
         config.theme = "neon".into();
         assert!(config.validate().is_err());
+
+        config.theme = "system".into();
+        config.speed_limit = Some(0);
+        assert!(config.validate().is_err());
     }
 
     #[tokio::test]
@@ -164,6 +193,8 @@ mod tests {
         let path = temp_file("config-roundtrip");
         let config = AppConfig {
             theme: "dark".into(),
+            proxy: Some("socks5://user:pass@127.0.0.1:1080".into()),
+            speed_limit: Some(2 * 1024 * 1024),
             ..AppConfig::default()
         };
 
@@ -195,6 +226,8 @@ mod tests {
         assert_eq!(loaded.max_concurrent_tasks, 5);
         assert_eq!(loaded.default_download_path, PathBuf::from("/tmp/legacy"));
         assert_eq!(loaded.user_agent, "Legacy/1.0");
+        assert_eq!(loaded.proxy, Some("http://localhost:8080".into()));
+        assert_eq!(loaded.speed_limit, Some(1024 * 1024));
         assert_eq!(loaded.theme, "system");
 
         let _ = fs_err::tokio::remove_file(path).await;

@@ -175,6 +175,9 @@ pub struct Task {
     /// 文件校验
     #[serde(default)]
     pub checksum: Option<ChecksumType>,
+    /// 任务速度限制（字节/秒）
+    #[serde(default)]
+    pub speed_limit: Option<u64>,
 }
 
 /// 下载任务（向后兼容）
