@@ -27,4 +27,5 @@ dist-ssr
 target/
 
 .claude/settings.local.json
+.claude/settings.json
 .superpowers/
