@@ -53,6 +53,13 @@ async fn main() -> Result<()> {
             cx.open_window(
                 WindowOptions {
                     titlebar: Some(TitleBar::title_bar_options()),
+                    window_bounds: Some(WindowBounds::Windowed(Bounds {
+                        origin: Point::default(),
+                        size: Size {
+                            width: px(1200.),
+                            height: px(800.),
+                        },
+                    })),
                     ..Default::default()
                 },
                 |window, cx| {
