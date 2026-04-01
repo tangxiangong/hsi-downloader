@@ -22,14 +22,18 @@ impl YuShiGUI {
             utils::button_style(utils::primary_color(cx), gpui_component::white(), cx);
         let secondary_style =
             utils::button_style(utils::panel_color(cx), utils::text_color(cx), cx);
+        let muted = utils::muted_text_color(cx);
 
         window.open_dialog(cx, move |dialog, _, _cx| {
             dialog
                 .title("Add Download Task")
                 .child(
                     v_flex()
-                        .gap_3()
-                        .child("Use the default download directory by leaving destination blank.")
+                        .p_2()
+                        .gap_4()
+                        .child(div().text_sm().text_color(muted).child(
+                            "Use the default download directory by leaving destination blank.",
+                        ))
                         .child(Input::new(&add_url_input))
                         .child(Input::new(&add_dest_input))
                         .child(Input::new(&add_speed_input)),
