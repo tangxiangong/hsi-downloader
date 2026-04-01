@@ -2,7 +2,7 @@ use crate::{
     app_state::{AppState, ViewKind},
     components::add_task::{AddTaskDraft, parse_optional_speed_limit},
     components::task_item::progress_percent,
-    views::{history::search_history, settings::sanitize_theme, task_list::filter_tasks},
+    views::{history::search_history, task_list::filter_tasks},
 };
 use anyhow::Result;
 use gpui::*;
@@ -15,7 +15,7 @@ use gpui_component::{
     v_flex,
 };
 use std::path::PathBuf;
-use yushi_core::{AppConfig, DownloadTask, TaskStatus};
+use yushi_core::{AppConfig, DownloadTask, TaskStatus, config::AppTheme};
 
 pub struct AppView {
     app_state: Entity<AppState>,
@@ -31,7 +31,7 @@ pub struct AppView {
     settings_user_agent_input: Entity<InputState>,
     settings_proxy_input: Entity<InputState>,
     settings_speed_limit_input: Entity<InputState>,
-    theme_choice: String,
+    theme_choice: AppTheme,
 }
 
 impl AppView {
@@ -132,11 +132,11 @@ impl AppView {
         self.theme_choice = config.theme;
     }
 
-    fn apply_theme(theme: &str, window: &mut Window, cx: &mut App) {
+    fn apply_theme(theme: AppTheme, window: &mut Window, cx: &mut App) {
         match theme {
-            "dark" => Theme::change(ThemeMode::Dark, Some(window), cx),
-            "light" => Theme::change(ThemeMode::Light, Some(window), cx),
-            _ => Theme::sync_system_appearance(Some(window), cx),
+            AppTheme::Dark => Theme::change(ThemeMode::Dark, Some(window), cx),
+            AppTheme::Light => Theme::change(ThemeMode::Light, Some(window), cx),
+            AppTheme::System => Theme::sync_system_appearance(Some(window), cx),
         }
     }
 
@@ -306,7 +306,7 @@ impl AppView {
         let (queue, config_path) = self.app_state.read_with(cx, |state, _| {
             (state.queue.clone(), state.config_path.clone())
         });
-        let theme = new_config.theme.clone();
+        let theme = new_config.theme;
 
         cx.spawn_in(window, async move |view, window| {
             let config_for_save = new_config.clone();
@@ -332,7 +332,7 @@ impl AppView {
                         );
                         cx.notify();
                     });
-                    Self::apply_theme(&theme, window, cx);
+                    Self::apply_theme(theme, window, cx);
                     window.push_notification("Settings saved", cx);
                 }
                 Err(err) => window.push_notification(err.to_string(), cx),
@@ -359,7 +359,7 @@ impl AppView {
                 "" => None,
                 value => parse_optional_speed_limit(value)?,
             },
-            theme: sanitize_theme(&self.theme_choice),
+            theme: self.theme_choice,
         })
     }
 
@@ -717,9 +717,9 @@ impl AppView {
                         Button::new("theme-light")
                             .custom(button_style(panel_color(cx), text_color(cx), cx))
                             .label("浅色")
-                            .selected(self.theme_choice == "light")
+                            .selected(self.theme_choice == AppTheme::Light)
                             .on_click(cx.listener(|view, _, _, cx| {
-                                view.theme_choice = "light".into();
+                                view.theme_choice = AppTheme::Light;
                                 cx.notify();
                             })),
                     )
@@ -727,9 +727,9 @@ impl AppView {
                         Button::new("theme-dark")
                             .custom(button_style(panel_color(cx), text_color(cx), cx))
                             .label("深色")
-                            .selected(self.theme_choice == "dark")
+                            .selected(self.theme_choice == AppTheme::Dark)
                             .on_click(cx.listener(|view, _, _, cx| {
-                                view.theme_choice = "dark".into();
+                                view.theme_choice = AppTheme::Dark;
                                 cx.notify();
                             })),
                     )
@@ -737,9 +737,9 @@ impl AppView {
                         Button::new("theme-system")
                             .custom(button_style(panel_color(cx), text_color(cx), cx))
                             .label("跟随系统")
-                            .selected(self.theme_choice == "system")
+                            .selected(self.theme_choice == AppTheme::System)
                             .on_click(cx.listener(|view, _, _, cx| {
-                                view.theme_choice = "system".into();
+                                view.theme_choice = AppTheme::System;
                                 cx.notify();
                             })),
                     ),

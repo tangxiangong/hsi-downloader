@@ -7,6 +7,7 @@ use app_state::AppState;
 use gpui::*;
 use gpui_component::{Root, Theme, ThemeMode, TitleBar};
 use views::app_view::AppView;
+use yushi_core::config::AppTheme;
 
 #[tokio::main(flavor = "multi_thread")]
 async fn main() -> Result<()> {
@@ -66,19 +67,11 @@ async fn main() -> Result<()> {
                     window.activate_window();
                     window.set_window_title("YuShi");
 
-                    match app_state.read(cx).config.theme.as_str() {
-                        "dark" => Theme::change(ThemeMode::Dark, Some(window), cx),
-                        "light" => Theme::change(ThemeMode::Light, Some(window), cx),
-                        _ => Theme::sync_system_appearance(Some(window), cx),
+                    match app_state.read(cx).config.theme {
+                        AppTheme::Dark => Theme::change(ThemeMode::Dark, Some(window), cx),
+                        AppTheme::Light => Theme::change(ThemeMode::Light, Some(window), cx),
+                        AppTheme::System => Theme::sync_system_appearance(Some(window), cx),
                     }
-
-                    let theme = Theme::global_mut(cx);
-                    if cfg!(target_os = "macos") {
-                        theme.font_family = "PingFang SC".into();
-                        theme.mono_font_family = "Menlo".into();
-                    }
-                    theme.font_size = px(15.);
-                    theme.mono_font_size = px(13.);
 
                     let view = cx.new(|cx| AppView::new(app_state.clone(), window, cx));
                     cx.new(|cx| Root::new(view, window, cx))

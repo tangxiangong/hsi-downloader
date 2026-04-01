@@ -25,7 +25,44 @@ pub struct AppConfig {
     #[serde(default)]
     pub speed_limit: Option<u64>,
     /// 主题设置 (light, dark, system)
-    pub theme: String,
+    pub theme: AppTheme,
+}
+
+#[derive(Debug, Clone, Copy, Serialize, Deserialize, PartialEq, Eq, Default)]
+pub enum AppTheme {
+    #[serde(rename = "light")]
+    Light,
+    #[serde(rename = "dark")]
+    Dark,
+    #[serde(rename = "system")]
+    #[default]
+    System,
+}
+
+impl std::fmt::Display for AppTheme {
+    fn fmt(&self, f: &mut std::fmt::Formatter<'_>) -> std::fmt::Result {
+        write!(
+            f,
+            "{}",
+            match self {
+                AppTheme::Light => "light",
+                AppTheme::Dark => "dark",
+                AppTheme::System => "system",
+            }
+        )
+    }
+}
+
+impl std::str::FromStr for AppTheme {
+    type Err = Error;
+    fn from_str(s: &str) -> Result<Self> {
+        match s {
+            "light" => Ok(AppTheme::Light),
+            "dark" => Ok(AppTheme::Dark),
+            "system" => Ok(AppTheme::System),
+            _ => Err(Error::ConfigError(format!("invalid theme: {s}"))),
+        }
+    }
 }
 
 impl Default for AppConfig {
@@ -41,7 +78,7 @@ impl Default for AppConfig {
             user_agent: "YuShi/1.0".to_string(),
             proxy: None,
             speed_limit: None,
-            theme: "system".to_string(),
+            theme: AppTheme::default(),
         }
     }
 }
@@ -98,11 +135,7 @@ impl AppConfig {
             reqwest::Proxy::all(proxy.as_str())
                 .map_err(|err| Error::ConfigError(format!("invalid proxy: {err}")))?;
         }
-        if !matches!(self.theme.as_str(), "light" | "dark" | "system") {
-            return Err(Error::ConfigError(
-                "theme must be one of: light, dark, system".into(),
-            ));
-        }
+
         Ok(())
     }
 
@@ -157,7 +190,7 @@ impl From<LegacyCliConfig> for AppConfig {
 
 #[cfg(test)]
 mod tests {
-    use super::AppConfig;
+    use super::{AppConfig, AppTheme};
     use std::{
         path::PathBuf,
         time::{SystemTime, UNIX_EPOCH},
@@ -180,10 +213,10 @@ mod tests {
         assert!(config.validate().is_err());
 
         config.max_concurrent_downloads = 1;
-        config.theme = "neon".into();
+        config.theme = AppTheme::Light;
         assert!(config.validate().is_err());
 
-        config.theme = "system".into();
+        config.theme = AppTheme::System;
         config.speed_limit = Some(0);
         assert!(config.validate().is_err());
     }
@@ -192,7 +225,7 @@ mod tests {
     async fn roundtrip_save_and_load() {
         let path = temp_file("config-roundtrip");
         let config = AppConfig {
-            theme: "dark".into(),
+            theme: AppTheme::Dark,
             proxy: Some("socks5://user:pass@127.0.0.1:1080".into()),
             speed_limit: Some(2 * 1024 * 1024),
             ..AppConfig::default()
@@ -228,7 +261,7 @@ mod tests {
         assert_eq!(loaded.user_agent, "Legacy/1.0");
         assert_eq!(loaded.proxy, Some("http://localhost:8080".into()));
         assert_eq!(loaded.speed_limit, Some(1024 * 1024));
-        assert_eq!(loaded.theme, "system");
+        assert_eq!(loaded.theme, AppTheme::System);
 
         let _ = fs_err::tokio::remove_file(path).await;
     }
@@ -263,7 +296,7 @@ mod tests {
             loaded.default_download_path,
             PathBuf::from("/tmp/downloads")
         );
-        assert_eq!(loaded.theme, "light");
+        assert_eq!(loaded.theme, AppTheme::Light);
         assert_eq!(loaded.user_agent, "Tauri/1.0");
 
         let _ = fs_err::tokio::remove_file(path).await;

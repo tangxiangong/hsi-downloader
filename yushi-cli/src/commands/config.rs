@@ -104,7 +104,7 @@ async fn set_config(key: String, value: String) -> Result<()> {
             ));
         }
         "theme" => {
-            config.theme = value.clone();
+            config.theme = value.parse()?;
             print_success(&format!("主题已设置为: {}", value));
         }
         _ => {

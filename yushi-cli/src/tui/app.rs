@@ -502,7 +502,7 @@ impl SettingField {
                 .speed_limit
                 .map(|limit| limit.to_string())
                 .unwrap_or_default(),
-            Self::Theme => config.theme.clone(),
+            Self::Theme => config.theme.to_string(),
         })
     }
 
@@ -544,7 +544,7 @@ impl SettingField {
                 };
             }
             Self::Theme => {
-                config.theme = value.trim().to_string();
+                config.theme = value.trim().parse()?;
             }
         }
 
