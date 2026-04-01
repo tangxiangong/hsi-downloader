@@ -94,6 +94,12 @@ pub fn task_card(task: DownloadTask, cx: &mut Context<YuShiGUI>) -> Div {
                                     gpui_component::white(),
                                     cx,
                                 )
+                            } else if action.is_destructive() {
+                                utils::button_style(
+                                    utils::danger_color(cx),
+                                    gpui_component::white(),
+                                    cx,
+                                )
                             } else {
                                 utils::button_style(
                                     utils::panel_color(cx),

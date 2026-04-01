@@ -57,6 +57,14 @@ pub fn primary_color(cx: &App) -> Hsla {
     }
 }
 
+pub fn danger_color(cx: &App) -> Hsla {
+    if cx.theme().is_dark() {
+        hsla(0.0, 0.70, 0.55, 1.0)
+    } else {
+        hsla(0.0, 0.72, 0.50, 1.0)
+    }
+}
+
 pub fn button_style(bg: Hsla, fg: Hsla, cx: &App) -> ButtonCustomVariant {
     ButtonCustomVariant::new(cx)
         .color(bg)
@@ -220,6 +228,10 @@ impl TaskAction {
 
     pub fn is_primary(self) -> bool {
         matches!(self, Self::Pause | Self::Resume)
+    }
+
+    pub fn is_destructive(self) -> bool {
+        matches!(self, Self::Cancel | Self::Remove | Self::DeleteFile)
     }
 
     pub fn label(self) -> &'static str {
