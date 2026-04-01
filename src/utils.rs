@@ -8,26 +8,22 @@ use yushi_core::{
 
 pub fn app_background(cx: &App) -> Hsla {
     if cx.theme().is_dark() {
-        hsla(0.62, 0.18, 0.11, 1.0)
+        hsla(0.62, 0.10, 0.08, 1.0)
     } else {
-        white()
+        hsla(0.60, 0.05, 0.96, 1.0)
     }
 }
 
 pub fn panel_color(cx: &App) -> Hsla {
     if cx.theme().is_dark() {
-        hsla(0.62, 0.16, 0.15, 1.0)
+        hsla(0.62, 0.12, 0.14, 1.0)
     } else {
-        hsla(0.60, 0.18, 0.96, 1.0)
+        white()
     }
 }
 
 pub fn card_color(cx: &App) -> Hsla {
-    if cx.theme().is_dark() {
-        hsla(0.62, 0.14, 0.19, 1.0)
-    } else {
-        hsla(0.60, 0.12, 0.93, 1.0)
-    }
+    panel_color(cx)
 }
 
 pub fn border_color(cx: &App) -> Hsla {
@@ -56,9 +52,9 @@ pub fn muted_text_color(cx: &App) -> Hsla {
 
 pub fn primary_color(cx: &App) -> Hsla {
     if cx.theme().is_dark() {
-        hsla(0.58, 0.80, 0.58, 1.0)
+        hsla(0.58, 0.80, 0.60, 1.0)
     } else {
-        hsla(0.58, 0.78, 0.48, 1.0)
+        hsla(0.60, 0.85, 0.50, 1.0)
     }
 }
 
