@@ -1,7 +1,6 @@
-use std::path::PathBuf;
-
 use gpui::*;
 use gpui_component::{ActiveTheme, button::ButtonCustomVariant};
+use std::path::PathBuf;
 use yushi_core::{
     AppConfig, CompletedTask, DownloadHistory, DownloadTask, TaskStatus, YuShi, parse_speed_limit,
 };
