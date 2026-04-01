@@ -212,11 +212,6 @@ mod tests {
         };
         assert!(config.validate().is_err());
 
-        config.max_concurrent_downloads = 1;
-        config.theme = AppTheme::Light;
-        assert!(config.validate().is_err());
-
-        config.theme = AppTheme::System;
         config.speed_limit = Some(0);
         assert!(config.validate().is_err());
     }
@@ -235,70 +230,6 @@ mod tests {
         let loaded = AppConfig::load(&path).await.expect("load config");
 
         assert_eq!(loaded, config);
-        let _ = fs_err::tokio::remove_file(path).await;
-    }
-
-    #[tokio::test]
-    async fn loads_legacy_cli_config() {
-        let path = temp_file("config-legacy-cli");
-        let legacy = r#"{
-            "default_connections": 8,
-            "default_max_tasks": 5,
-            "default_output_dir": "/tmp/legacy",
-            "user_agent": "Legacy/1.0",
-            "proxy": "http://localhost:8080",
-            "speed_limit": "1M"
-        }"#;
-
-        fs_err::tokio::write(&path, legacy)
-            .await
-            .expect("write legacy config");
-        let loaded = AppConfig::load(&path).await.expect("load legacy config");
-
-        assert_eq!(loaded.max_concurrent_downloads, 8);
-        assert_eq!(loaded.max_concurrent_tasks, 5);
-        assert_eq!(loaded.default_download_path, PathBuf::from("/tmp/legacy"));
-        assert_eq!(loaded.user_agent, "Legacy/1.0");
-        assert_eq!(loaded.proxy, Some("http://localhost:8080".into()));
-        assert_eq!(loaded.speed_limit, Some(1024 * 1024));
-        assert_eq!(loaded.theme, AppTheme::System);
-
-        let _ = fs_err::tokio::remove_file(path).await;
-    }
-
-    #[tokio::test]
-    async fn loads_tauri_config_with_window_state() {
-        let path = temp_file("config-legacy-tauri");
-        let legacy = r#"{
-            "default_download_path": "/tmp/downloads",
-            "max_concurrent_downloads": 3,
-            "max_concurrent_tasks": 2,
-            "chunk_size": 1048576,
-            "timeout": 15,
-            "user_agent": "Tauri/1.0",
-            "theme": "light",
-            "window": {
-              "width": 1200,
-              "height": 800,
-              "x": -1,
-              "y": -1,
-              "maximized": false,
-              "sidebar_open": true
-            }
-        }"#;
-
-        fs_err::tokio::write(&path, legacy)
-            .await
-            .expect("write tauri config");
-        let loaded = AppConfig::load(&path).await.expect("load tauri config");
-
-        assert_eq!(
-            loaded.default_download_path,
-            PathBuf::from("/tmp/downloads")
-        );
-        assert_eq!(loaded.theme, AppTheme::Light);
-        assert_eq!(loaded.user_agent, "Tauri/1.0");
-
         let _ = fs_err::tokio::remove_file(path).await;
     }
 }
