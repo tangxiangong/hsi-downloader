@@ -10,28 +10,37 @@ pub fn content_panel(
 ) -> Div {
     let panel = v_flex()
         .size_full()
-        .p_4()
-        .gap_4()
+        .p_6()
+        .gap_6()
+        .bg(utils::panel_color(cx))
+        .rounded_xl()
+        .shadow_md()
         .text_color(utils::text_color(cx))
-        .bg(utils::app_background(cx))
         .child(
             div()
-                .pb_2()
+                .pb_4()
                 .border_b_1()
                 .border_color(utils::border_color(cx))
-                .child(view_title(current_view)),
-        )
-        .child(
-            div()
-                .text_sm()
-                .text_color(utils::muted_text_color(cx))
-                .child(view_description(current_view)),
+                .child(
+                    div()
+                        .text_2xl()
+                        .font_semibold()
+                        .child(view_title(current_view)),
+                )
+                .child(
+                    div()
+                        .mt_1()
+                        .text_sm()
+                        .text_color(utils::muted_text_color(cx))
+                        .child(view_description(current_view)),
+                ),
         )
         .child(content);
 
     match status_message {
         Some(message) => panel.child(
             div()
+                .mt_auto()
                 .text_sm()
                 .text_color(utils::muted_text_color(cx))
                 .child(message),

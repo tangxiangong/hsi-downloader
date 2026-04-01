@@ -53,7 +53,8 @@ impl Render for YuShiGUI {
                         h_flex().size_full().child(sidebar).child(
                             v_flex()
                                 .size_full()
-                                .gap_3()
+                                .p_4()
+                                .gap_4()
                                 .child(summary_row)
                                 .child(content_panel),
                         ),
