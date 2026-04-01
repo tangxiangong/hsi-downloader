@@ -4,6 +4,7 @@ use crate::{
 };
 use serde::{Deserialize, Serialize};
 use std::{
+    io::ErrorKind,
     path::{Path, PathBuf},
     time::{SystemTime, UNIX_EPOCH},
 };
@@ -153,6 +154,33 @@ impl DownloadHistory {
         Self::mutate_file(path, |history| history.remove(id)).await
     }
 
+    pub async fn remove_entry_and_file_from_file(path: &Path, id: &str) -> Result<(Self, bool)> {
+        storage::migrate_legacy_file(path).await?;
+        let _lock = storage::acquire_file_lock(path).await?;
+
+        let mut history = if path.exists() {
+            let content = fs_err::tokio::read_to_string(path).await?;
+            serde_json::from_str(&content)?
+        } else {
+            Self::default()
+        };
+
+        let Some(pos) = history
+            .completed_tasks
+            .iter()
+            .position(|task| task.id == id)
+        else {
+            return Ok((history, false));
+        };
+
+        let task = history.completed_tasks[pos].clone();
+        remove_file_if_exists(&task.dest).await?;
+        history.completed_tasks.remove(pos);
+        history.save_unlocked(path).await?;
+
+        Ok((history, true))
+    }
+
     pub async fn clear_file(path: &Path) -> Result<Self> {
         let (history, _) = Self::mutate_file(path, |history| history.clear()).await?;
         Ok(history)
@@ -175,6 +203,14 @@ impl DownloadHistory {
         let result = mutate(&mut history);
         history.save_unlocked(path).await?;
         Ok((history, result))
+    }
+}
+
+async fn remove_file_if_exists(path: &Path) -> Result<()> {
+    match fs_err::tokio::remove_file(path).await {
+        Ok(()) => Ok(()),
+        Err(err) if err.kind() == ErrorKind::NotFound => Ok(()),
+        Err(err) => Err(err.into()),
     }
 }
 
@@ -245,6 +281,33 @@ mod tests {
             .await
             .expect("clear history");
         assert!(history.completed_tasks.is_empty());
+
+        let _ = fs_err::tokio::remove_file(path).await;
+    }
+
+    #[tokio::test]
+    async fn remove_entry_and_file_from_file_deletes_artifact() {
+        let path = temp_file("history-delete-file");
+        let artifact = std::env::temp_dir().join("yushi-history-delete-artifact.bin");
+        fs_err::tokio::write(&artifact, b"payload")
+            .await
+            .expect("write artifact");
+
+        let history = DownloadHistory::append_completed_to_file(
+            &path,
+            sample_task("artifact", &artifact.display().to_string()),
+        )
+        .await
+        .expect("append history");
+        assert_eq!(history.completed_tasks.len(), 1);
+
+        let (history, removed) =
+            DownloadHistory::remove_entry_and_file_from_file(&path, "artifact")
+                .await
+                .expect("remove history and file");
+        assert!(removed);
+        assert!(history.completed_tasks.is_empty());
+        assert!(!artifact.exists());
 
         let _ = fs_err::tokio::remove_file(path).await;
     }

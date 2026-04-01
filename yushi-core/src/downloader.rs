@@ -18,6 +18,7 @@ use reqwest::{
 };
 use std::{
     collections::HashMap,
+    io::ErrorKind,
     path::{Path, PathBuf},
     sync::{
         Arc,
@@ -1285,6 +1286,29 @@ impl YuShi {
         Err(Error::CannotRemoveTaskInCurrentStatus)
     }
 
+    /// 删除任务对应的本地文件，并将该任务从队列中移除
+    pub async fn remove_task_with_file(&self, task_id: &str) -> Result<()> {
+        let task = {
+            let tasks = self.tasks.read().await;
+            let Some(task) = tasks.get(task_id) else {
+                return Err(Error::TaskNotFound);
+            };
+
+            if !(task.status == TaskStatus::Completed
+                || task.status == TaskStatus::Cancelled
+                || task.status == TaskStatus::Failed)
+            {
+                return Err(Error::CannotRemoveTaskInCurrentStatus);
+            }
+
+            task.clone()
+        };
+
+        remove_file_if_exists(&task.dest).await?;
+        remove_file_if_exists(&task.dest.with_extension("json")).await?;
+        self.remove_task(task_id).await
+    }
+
     /// 获取所有任务
     pub async fn get_all_tasks(&self) -> Vec<Task> {
         let tasks = self.tasks.read().await;
@@ -1304,6 +1328,14 @@ impl YuShi {
         drop(tasks);
         self.save_queue_state().await?;
         Ok(())
+    }
+}
+
+async fn remove_file_if_exists(path: &Path) -> Result<()> {
+    match fs::remove_file(path).await {
+        Ok(()) => Ok(()),
+        Err(err) if err.kind() == ErrorKind::NotFound => Ok(()),
+        Err(err) => Err(err.into()),
     }
 }
 
@@ -1345,7 +1377,7 @@ mod tests {
             chunk_size: 100,
             ..Default::default()
         };
-        
+
         let (downloader, _) = YuShi::with_config(config, 1, temp_file("queue-state"));
         let state = downloader
             .build_chunked_state(

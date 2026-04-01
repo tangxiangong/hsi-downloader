@@ -258,6 +258,210 @@ impl AppView {
         });
     }
 
+    fn open_task_delete_file_dialog(
+        &mut self,
+        task_id: SharedString,
+        destination: String,
+        window: &mut Window,
+        cx: &mut Context<Self>,
+    ) {
+        let app_state = self.app_state.clone();
+        let confirm_style = button_style(cx.theme().red, white(), cx);
+        let cancel_style = button_style(panel_color(cx), text_color(cx), cx);
+        let muted = muted_text_color(cx);
+
+        window.open_dialog(cx, move |dialog, _, _cx| {
+            dialog
+                .title("确认删除文件")
+                .child(
+                    v_flex()
+                        .gap_3()
+                        .child("这会删除本地文件，并将该任务从任务列表中移除。")
+                        .child(div().text_sm().text_color(muted).child(destination.clone())),
+                )
+                .footer(
+                    div()
+                        .child(
+                            Button::new(SharedString::from(format!(
+                                "confirm-delete-task-file-{}",
+                                task_id
+                            )))
+                            .custom(confirm_style)
+                            .label("删除文件")
+                            .on_click({
+                                let app_state = app_state.clone();
+                                let task_id = task_id.clone();
+                                let destination = destination.clone();
+                                move |_, window, cx| {
+                                    let queue =
+                                        app_state.read_with(cx, |state, _| state.queue.clone());
+                                    let app_state = app_state.clone();
+                                    let task_id_for_async = task_id.to_string();
+                                    let notification_target = destination.clone();
+
+                                    window
+                                        .spawn(cx, async move |window| {
+                                            let result = async {
+                                                queue
+                                                    .remove_task_with_file(&task_id_for_async)
+                                                    .await?;
+                                                let tasks = queue.get_all_tasks().await;
+                                                Ok::<_, anyhow::Error>(tasks)
+                                            }
+                                            .await;
+
+                                            let _ = app_state.update_in(
+                                                window,
+                                                move |state, window, cx| match result {
+                                                    Ok(tasks) => {
+                                                        state.tasks = tasks;
+                                                        state.status_message = Some(format!(
+                                                            "Deleted file for task {}",
+                                                            task_id_for_async
+                                                        ));
+                                                        cx.notify();
+                                                        window.close_dialog(cx);
+                                                        window.push_notification(
+                                                            format!(
+                                                                "已删除文件: {}",
+                                                                notification_target
+                                                            ),
+                                                            cx,
+                                                        );
+                                                    }
+                                                    Err(err) => {
+                                                        window
+                                                            .push_notification(err.to_string(), cx);
+                                                    }
+                                                },
+                                            );
+                                        })
+                                        .detach();
+                                }
+                            }),
+                        )
+                        .child(
+                            Button::new(SharedString::from(format!(
+                                "cancel-delete-task-file-{}",
+                                task_id
+                            )))
+                            .custom(cancel_style)
+                            .label("取消")
+                            .on_click(|_, window, cx| window.close_dialog(cx)),
+                        ),
+                )
+        });
+    }
+
+    fn open_history_delete_file_dialog(
+        &mut self,
+        history_id: SharedString,
+        destination: String,
+        window: &mut Window,
+        cx: &mut Context<Self>,
+    ) {
+        let app_state = self.app_state.clone();
+        let history_path = self
+            .app_state
+            .read_with(cx, |state, _| state.history_path.clone());
+        let confirm_style = button_style(cx.theme().red, white(), cx);
+        let cancel_style = button_style(panel_color(cx), text_color(cx), cx);
+        let muted = muted_text_color(cx);
+
+        window.open_dialog(cx, move |dialog, _, _cx| {
+            dialog
+                .title("确认删除历史文件")
+                .child(
+                    v_flex()
+                        .gap_3()
+                        .child("这会删除本地文件，并同时移除这条历史记录。")
+                        .child(
+                            div()
+                                .text_sm()
+                                .text_color(muted)
+                                .child(destination.clone()),
+                        ),
+                )
+                .footer(
+                    div()
+                        .child(
+                            Button::new(SharedString::from(format!(
+                                "confirm-delete-history-file-{}",
+                                history_id
+                            )))
+                            .custom(confirm_style)
+                            .label("删除文件")
+                            .on_click({
+                                let app_state = app_state.clone();
+                                let history_id = history_id.clone();
+                                let history_path = history_path.clone();
+                                let destination = destination.clone();
+                                move |_, window, cx| {
+                                    let app_state = app_state.clone();
+                                    let history_path = history_path.clone();
+                                    let history_id_for_async = history_id.to_string();
+                                    let notification_target = destination.clone();
+
+                                    window
+                                        .spawn(cx, async move |window| {
+                                            let result = async {
+                                                yushi_core::DownloadHistory::remove_entry_and_file_from_file(
+                                                    &history_path,
+                                                    &history_id_for_async,
+                                                )
+                                                .await
+                                            }
+                                            .await;
+
+                                            let _ = app_state.update_in(
+                                                window,
+                                                move |state, window, cx| match result {
+                                                    Ok((history, true)) => {
+                                                        state.history = history;
+                                                        state.status_message = Some(format!(
+                                                            "Deleted history file {}",
+                                                            history_id_for_async
+                                                        ));
+                                                        cx.notify();
+                                                        window.close_dialog(cx);
+                                                        window.push_notification(
+                                                            format!(
+                                                                "已删除文件: {}",
+                                                                notification_target
+                                                            ),
+                                                            cx,
+                                                        );
+                                                    }
+                                                    Ok((_, false)) => window.push_notification(
+                                                        "History item not found",
+                                                        cx,
+                                                    ),
+                                                    Err(err) => {
+                                                        window.push_notification(
+                                                            err.to_string(),
+                                                            cx,
+                                                        );
+                                                    }
+                                                },
+                                            );
+                                        })
+                                        .detach();
+                                }
+                            }),
+                        )
+                        .child(
+                            Button::new(SharedString::from(format!(
+                                "cancel-delete-history-file-{}",
+                                history_id
+                            )))
+                            .custom(cancel_style)
+                            .label("取消")
+                            .on_click(|_, window, cx| window.close_dialog(cx)),
+                        ),
+                )
+        });
+    }
+
     fn run_task_action(
         &mut self,
         task_id: SharedString,
@@ -274,6 +478,9 @@ impl AppView {
                     TaskAction::Resume => queue.resume_task(&task_id_for_async).await?,
                     TaskAction::Cancel => queue.cancel_task(&task_id_for_async).await?,
                     TaskAction::Remove => queue.remove_task(&task_id_for_async).await?,
+                    TaskAction::DeleteFile => {
+                        queue.remove_task_with_file(&task_id_for_async).await?
+                    }
                 }
 
                 Ok::<_, anyhow::Error>(queue.get_all_tasks().await)
@@ -289,6 +496,57 @@ impl AppView {
                         cx.notify();
                     });
                 }
+                Err(err) => window.push_notification(err.to_string(), cx),
+            });
+        })
+        .detach();
+    }
+
+    fn run_history_action(
+        &mut self,
+        history_id: SharedString,
+        action: HistoryAction,
+        window: &mut Window,
+        cx: &mut Context<Self>,
+    ) {
+        let history_path = self
+            .app_state
+            .read_with(cx, |state, _| state.history_path.clone());
+        let history_id_for_async = history_id.to_string();
+
+        cx.spawn_in(window, async move |view, window| {
+            let result = async {
+                let (history, changed) = match action {
+                    HistoryAction::RemoveRecord => {
+                        yushi_core::DownloadHistory::remove_from_file(
+                            &history_path,
+                            &history_id_for_async,
+                        )
+                        .await?
+                    }
+                    HistoryAction::DeleteFile => {
+                        yushi_core::DownloadHistory::remove_entry_and_file_from_file(
+                            &history_path,
+                            &history_id_for_async,
+                        )
+                        .await?
+                    }
+                };
+
+                Ok::<_, anyhow::Error>((history, changed))
+            }
+            .await;
+
+            let _ = view.update_in(window, move |view, window, cx| match result {
+                Ok((history, true)) => {
+                    view.app_state.update(cx, |state, cx| {
+                        state.history = history;
+                        state.status_message =
+                            Some(format!("{} {}", action.label(), history_id_for_async));
+                        cx.notify();
+                    });
+                }
+                Ok((_, false)) => window.push_notification(action.not_found_message(), cx),
                 Err(err) => window.push_notification(err.to_string(), cx),
             });
         })
@@ -398,16 +656,7 @@ impl AppView {
             .gap_3()
             .children(tasks.into_iter().map(|task| {
                 let task_id: SharedString = task.id.clone().into();
-                let primary_label = if task.status == TaskStatus::Paused {
-                    "Resume"
-                } else {
-                    "Pause"
-                };
-                let primary_action = if task.status == TaskStatus::Paused {
-                    TaskAction::Resume
-                } else {
-                    TaskAction::Pause
-                };
+                let actions = task_actions(task.status);
 
                 v_flex()
                     .gap_2()
@@ -464,58 +713,42 @@ impl AppView {
                     .child(
                         h_flex()
                             .gap_2()
-                            .child(
-                                Button::new(SharedString::from(format!("primary-{}", task.id)))
-                                    .custom(button_style(primary_color(cx), white(), cx))
-                                    .label(match task.status {
-                                        TaskStatus::Downloading => "暂停",
-                                        TaskStatus::Paused => "继续",
-                                        _ => primary_label,
-                                    })
-                                    .on_click(cx.listener({
-                                        let task_id = task_id.clone();
-                                        move |view, _, window, cx| {
+                            .children(actions.into_iter().enumerate().map(|(index, action)| {
+                                let button_id = SharedString::from(format!(
+                                    "task-{}-{}-{}",
+                                    task.id,
+                                    index,
+                                    action.id_suffix()
+                                ));
+                                let task_id = task_id.clone();
+                                let destination = task.dest.display().to_string();
+                                let style = if action.is_primary() {
+                                    button_style(primary_color(cx), white(), cx)
+                                } else {
+                                    button_style(panel_color(cx), text_color(cx), cx)
+                                };
+
+                                Button::new(button_id)
+                                    .custom(style)
+                                    .label(action.button_label())
+                                    .on_click(cx.listener(move |view, _, window, cx| {
+                                        if action == TaskAction::DeleteFile {
+                                            view.open_task_delete_file_dialog(
+                                                task_id.clone(),
+                                                destination.clone(),
+                                                window,
+                                                cx,
+                                            );
+                                        } else {
                                             view.run_task_action(
                                                 task_id.clone(),
-                                                primary_action,
+                                                action,
                                                 window,
                                                 cx,
                                             );
                                         }
-                                    })),
-                            )
-                            .child(
-                                Button::new(SharedString::from(format!("cancel-{}", task.id)))
-                                    .custom(button_style(panel_color(cx), text_color(cx), cx))
-                                    .label("取消")
-                                    .on_click(cx.listener({
-                                        let task_id = task_id.clone();
-                                        move |view, _, window, cx| {
-                                            view.run_task_action(
-                                                task_id.clone(),
-                                                TaskAction::Cancel,
-                                                window,
-                                                cx,
-                                            );
-                                        }
-                                    })),
-                            )
-                            .child(
-                                Button::new(SharedString::from(format!("remove-{}", task.id)))
-                                    .custom(button_style(panel_color(cx), text_color(cx), cx))
-                                    .label("移除")
-                                    .on_click(cx.listener({
-                                        let task_id = task_id.clone();
-                                        move |view, _, window, cx| {
-                                            view.run_task_action(
-                                                task_id.clone(),
-                                                TaskAction::Remove,
-                                                window,
-                                                cx,
-                                            );
-                                        }
-                                    })),
-                            ),
+                                    }))
+                            })),
                     )
             }))
             .into_any_element()
@@ -573,48 +806,46 @@ impl AppView {
                             item.duration
                         ))
                         .child(
-                            Button::new(SharedString::from(format!("history-remove-{}", id)))
-                                .custom(button_style(panel_color(cx), text_color(cx), cx))
-                                .label("删除")
-                                .on_click(cx.listener(move |view, _, window, cx| {
-                                    let history_path = view
-                                        .app_state
-                                        .read_with(cx, |state, _| state.history_path.clone());
-                                    let id = id.clone();
-                                    cx.spawn_in(window, async move |view, window| {
-                                        let result = async move {
-                                            let (history, removed) =
-                                                yushi_core::DownloadHistory::remove_from_file(
-                                                    &history_path,
-                                                    &id,
-                                                )
-                                                .await?;
-                                            Ok::<_, anyhow::Error>((history, removed))
-                                        }
-                                        .await;
+                            h_flex().gap_2().children(
+                                history_actions()
+                                    .into_iter()
+                                    .enumerate()
+                                    .map(|(index, action)| {
+                                        let button_id = SharedString::from(format!(
+                                            "history-{}-{}-{}",
+                                            id,
+                                            index,
+                                            action.id_suffix()
+                                        ));
+                                        let history_id: SharedString = id.clone().into();
+                                        let destination = item.dest.display().to_string();
 
-                                        let _ = view.update_in(window, move |view, window, cx| {
-                                            match result {
-                                                Ok((history, true)) => {
-                                                    view.app_state.update(cx, |state, cx| {
-                                                        state.history = history;
-                                                        state.status_message =
-                                                            Some("Removed history item".into());
-                                                        cx.notify();
-                                                    });
+                                        Button::new(button_id)
+                                            .custom(button_style(
+                                                panel_color(cx),
+                                                text_color(cx),
+                                                cx,
+                                            ))
+                                            .label(action.button_label())
+                                            .on_click(cx.listener(move |view, _, window, cx| {
+                                                if action == HistoryAction::DeleteFile {
+                                                    view.open_history_delete_file_dialog(
+                                                        history_id.clone(),
+                                                        destination.clone(),
+                                                        window,
+                                                        cx,
+                                                    );
+                                                } else {
+                                                    view.run_history_action(
+                                                        history_id.clone(),
+                                                        action,
+                                                        window,
+                                                        cx,
+                                                    );
                                                 }
-                                                Ok((_, false)) => window.push_notification(
-                                                    "History item not found",
-                                                    cx,
-                                                ),
-                                                Err(err) => {
-                                                    window.push_notification(err.to_string(), cx)
-                                                }
-                                            }
-                                        });
-                                    })
-                                    .detach();
-                                })),
+                                            }))
+                                    }),
+                            ),
                         )
                 }))
                 .into_any_element()
@@ -1232,21 +1463,98 @@ fn status_badge(status: TaskStatus, cx: &App) -> Div {
         .child(label)
 }
 
-#[derive(Clone, Copy)]
+#[derive(Clone, Copy, PartialEq, Eq)]
 enum TaskAction {
     Pause,
     Resume,
     Cancel,
     Remove,
+    DeleteFile,
 }
 
 impl TaskAction {
-    fn label(self) -> &'static str {
+    fn button_label(self) -> &'static str {
         match self {
-            Self::Pause => "Paused",
-            Self::Resume => "Resumed",
-            Self::Cancel => "Cancelled",
-            Self::Remove => "Removed",
+            Self::Pause => "暂停下载",
+            Self::Resume => "继续下载",
+            Self::Cancel => "取消下载",
+            Self::Remove => "删除任务",
+            Self::DeleteFile => "删除文件",
         }
     }
+
+    fn id_suffix(self) -> &'static str {
+        match self {
+            Self::Pause => "pause",
+            Self::Resume => "resume",
+            Self::Cancel => "cancel",
+            Self::Remove => "remove",
+            Self::DeleteFile => "delete-file",
+        }
+    }
+
+    fn is_primary(self) -> bool {
+        matches!(self, Self::Pause | Self::Resume)
+    }
+
+    fn label(self) -> &'static str {
+        match self {
+            Self::Pause => "Paused task",
+            Self::Resume => "Resumed task",
+            Self::Cancel => "Cancelled download",
+            Self::Remove => "Removed task",
+            Self::DeleteFile => "Deleted file for task",
+        }
+    }
+}
+
+fn task_actions(status: TaskStatus) -> Vec<TaskAction> {
+    match status {
+        TaskStatus::Pending | TaskStatus::Downloading => {
+            vec![TaskAction::Pause, TaskAction::Cancel]
+        }
+        TaskStatus::Paused => vec![TaskAction::Resume, TaskAction::Cancel],
+        TaskStatus::Completed | TaskStatus::Failed | TaskStatus::Cancelled => {
+            vec![TaskAction::Remove, TaskAction::DeleteFile]
+        }
+    }
+}
+
+#[derive(Clone, Copy, PartialEq, Eq)]
+enum HistoryAction {
+    RemoveRecord,
+    DeleteFile,
+}
+
+impl HistoryAction {
+    fn button_label(self) -> &'static str {
+        match self {
+            Self::RemoveRecord => "删除记录",
+            Self::DeleteFile => "删除文件",
+        }
+    }
+
+    fn id_suffix(self) -> &'static str {
+        match self {
+            Self::RemoveRecord => "remove-record",
+            Self::DeleteFile => "delete-file",
+        }
+    }
+
+    fn label(self) -> &'static str {
+        match self {
+            Self::RemoveRecord => "Removed history record",
+            Self::DeleteFile => "Deleted history file",
+        }
+    }
+
+    fn not_found_message(self) -> &'static str {
+        match self {
+            Self::RemoveRecord | Self::DeleteFile => "History item not found",
+        }
+    }
+}
+
+fn history_actions() -> [HistoryAction; 2] {
+    [HistoryAction::RemoveRecord, HistoryAction::DeleteFile]
 }
