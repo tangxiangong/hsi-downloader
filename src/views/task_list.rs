@@ -1,23 +1,18 @@
 use yushi_core::DownloadTask;
 
-pub fn filter_tasks(
-    tasks: &[DownloadTask],
-    view: crate::app_state::ViewKind,
-) -> Vec<&DownloadTask> {
+pub fn filter_tasks(tasks: &[DownloadTask], view: crate::state::ViewKind) -> Vec<&DownloadTask> {
     let mut tasks = tasks
         .iter()
         .filter(|task| match view {
-            crate::app_state::ViewKind::AllTasks => true,
-            crate::app_state::ViewKind::Downloading => {
+            crate::state::ViewKind::AllTasks => true,
+            crate::state::ViewKind::Downloading => {
                 matches!(
                     task.status,
                     yushi_core::TaskStatus::Pending | yushi_core::TaskStatus::Downloading
                 )
             }
-            crate::app_state::ViewKind::Completed => {
-                task.status == yushi_core::TaskStatus::Completed
-            }
-            crate::app_state::ViewKind::History | crate::app_state::ViewKind::Settings => false,
+            crate::state::ViewKind::Completed => task.status == yushi_core::TaskStatus::Completed,
+            crate::state::ViewKind::History | crate::state::ViewKind::Settings => false,
         })
         .collect::<Vec<_>>();
 

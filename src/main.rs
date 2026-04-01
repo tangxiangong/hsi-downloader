@@ -1,12 +1,13 @@
-mod app_state;
 mod components;
+mod state;
+mod utils;
 mod views;
 
 use anyhow::Result;
-use app_state::AppState;
 use gpui::*;
 use gpui_component::{Root, Theme, ThemeMode, TitleBar};
-use views::app_view::AppView;
+use state::AppState;
+use views::YuShiGUI;
 use yushi_core::config::AppTheme;
 
 #[tokio::main(flavor = "multi_thread")]
@@ -73,7 +74,7 @@ async fn main() -> Result<()> {
                         AppTheme::System => Theme::sync_system_appearance(Some(window), cx),
                     }
 
-                    let view = cx.new(|cx| AppView::new(app_state.clone(), window, cx));
+                    let view = cx.new(|cx| YuShiGUI::new(app_state.clone(), window, cx));
                     cx.new(|cx| Root::new(view, window, cx))
                 },
             )?;
