@@ -15,9 +15,8 @@ pub struct ThemeColors {
     pub border: Color,
     pub border_active: Color,
 
-    // Selection / overlay
+    // Selection
     pub selection_bg: Color,
-    pub overlay_bg: Color,
 
     // Text
     pub text: Color,
@@ -42,7 +41,6 @@ impl ThemeColors {
             border_active: Color::Cyan,
 
             selection_bg: Color::DarkGray,
-            overlay_bg: Color::DarkGray,
 
             text: Color::White,
             text_secondary: Color::Gray,
@@ -66,7 +64,6 @@ impl ThemeColors {
 
             // Indexed(254) is a near-white gray — readable against a white terminal bg
             selection_bg: Color::Indexed(254),
-            overlay_bg: Color::Indexed(250),
 
             text: Color::Black,
             text_secondary: Color::DarkGray,

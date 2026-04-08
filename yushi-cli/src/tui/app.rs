@@ -222,7 +222,6 @@ pub struct App {
     pub selected_index: usize,
     pub filter: TaskFilter,
     pub filtered_indices: Vec<usize>,
-    pub task_scroll: usize,
 
     // History list
     pub history_index: usize,
@@ -266,7 +265,7 @@ impl App {
             selected_index: 0,
             filter: TaskFilter::All,
             filtered_indices: Vec::new(),
-            task_scroll: 0,
+
             history_index: 0,
             setting_index: 0,
             edit_buffer: String::new(),
@@ -846,14 +845,6 @@ impl App {
         Ok(())
     }
 
-    // Kept for backward compat with ui.rs until it is rewritten.
-    pub fn get_selected_task(&self) -> Option<&DownloadTask> {
-        self.selected_task()
-    }
-
-    pub fn get_selected_history(&self) -> Option<&yushi_core::CompletedTask> {
-        self.history.completed_tasks.get(self.history_index)
-    }
 }
 
 // ==================== SettingField impl ====================

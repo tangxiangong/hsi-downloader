@@ -1,9 +1,9 @@
 use ratatui::{
-    Frame,
     layout::{Constraint, Layout, Rect},
     style::{Modifier, Style},
     text::Line,
     widgets::Paragraph,
+    Frame,
 };
 
 use crate::tui::app::{App, TaskFilter};
@@ -11,7 +11,11 @@ use crate::tui::theme::ThemeColors;
 
 /// Draw the filter tab bar (All / Downloading / Completed).
 pub fn draw(f: &mut Frame, app: &App, theme: &ThemeColors, area: Rect) {
-    let filters = [TaskFilter::All, TaskFilter::Downloading, TaskFilter::Completed];
+    let filters = [
+        TaskFilter::All,
+        TaskFilter::Downloading,
+        TaskFilter::Completed,
+    ];
 
     let chunks = Layout::horizontal([
         Constraint::Ratio(1, 3),
