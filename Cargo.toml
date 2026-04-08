@@ -1,6 +1,6 @@
 [workspace]
 resolver = "3"
-members = ["yushi-core", "yushi-cli"]
+members = ["yushi-core", "yushi-cli", "src-tauri"]
 
 [workspace.package]
 authors = ["tangxiangong <tangxiangong@gmail.com>"]
