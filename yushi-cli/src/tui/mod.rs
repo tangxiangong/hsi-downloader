@@ -1,8 +1,8 @@
 mod app;
 mod event;
 pub mod theme;
-pub mod widgets;
 mod ui;
+pub mod widgets;
 
 pub use app::App;
 pub use event::{Event, EventHandler};

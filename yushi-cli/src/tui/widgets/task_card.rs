@@ -32,11 +32,7 @@ fn format_eta(secs: u64) -> String {
 
 /// Determine file-type icon by file extension.
 fn file_icon(filename: &str) -> &'static str {
-    let ext = filename
-        .rsplit('.')
-        .next()
-        .unwrap_or("")
-        .to_lowercase();
+    let ext = filename.rsplit('.').next().unwrap_or("").to_lowercase();
     match ext.as_str() {
         "zip" | "rar" | "7z" | "tar" | "gz" | "bz2" | "xz" => "📦",
         "iso" | "img" | "dmg" => "💿",
@@ -110,7 +106,8 @@ pub fn draw(f: &mut Frame, task: &DownloadTask, selected: bool, theme: &ThemeCol
     // Calculate available width for filename
     let hint_len = action_hints.chars().count() as u16;
     let prefix_len = (icon.chars().count() + status_icon.chars().count() + 2) as u16;
-    let avail_for_name = (rows[0].width as i32 - prefix_len as i32 - hint_len as i32 - 2).max(8) as usize;
+    let avail_for_name =
+        (rows[0].width as i32 - prefix_len as i32 - hint_len as i32 - 2).max(8) as usize;
     let short_name = truncate(filename, avail_for_name);
 
     let title_line = Line::from(vec![
@@ -120,13 +117,12 @@ pub fn draw(f: &mut Frame, task: &DownloadTask, selected: bool, theme: &ThemeCol
             Style::default().fg(theme.text).add_modifier(Modifier::BOLD),
         ),
         // right-pad with spaces
-        Span::raw(" ".repeat(
-            (rows[0].width as i32
-                - prefix_len as i32
-                - avail_for_name as i32
-                - hint_len as i32)
-                .max(0) as usize,
-        )),
+        Span::raw(
+            " ".repeat(
+                (rows[0].width as i32 - prefix_len as i32 - avail_for_name as i32 - hint_len as i32)
+                    .max(0) as usize,
+            ),
+        ),
         Span::styled(action_hints, Style::default().fg(theme.muted)),
     ]);
     f.render_widget(Paragraph::new(title_line), rows[0]);
@@ -155,9 +151,7 @@ pub fn draw(f: &mut Frame, task: &DownloadTask, selected: bool, theme: &ThemeCol
         }
         TaskStatus::Pending => "等待中".to_string(),
         TaskStatus::Completed => format!("{} · 已完成", format_size(task.total_size)),
-        TaskStatus::Failed => {
-            task.error.clone().unwrap_or_else(|| "下载失败".to_string())
-        }
+        TaskStatus::Failed => task.error.clone().unwrap_or_else(|| "下载失败".to_string()),
         TaskStatus::Cancelled => "已取消".to_string(),
     };
 

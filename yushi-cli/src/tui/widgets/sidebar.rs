@@ -32,7 +32,11 @@ pub fn draw(f: &mut Frame, app: &App, theme: &ThemeColors, area: Rect) {
 
     // Logo
     let logo = Paragraph::new(Line::from("驭时"))
-        .style(Style::default().fg(theme.primary).add_modifier(Modifier::BOLD))
+        .style(
+            Style::default()
+                .fg(theme.primary)
+                .add_modifier(Modifier::BOLD),
+        )
         .alignment(ratatui::layout::Alignment::Center);
     f.render_widget(logo, chunks[0]);
 

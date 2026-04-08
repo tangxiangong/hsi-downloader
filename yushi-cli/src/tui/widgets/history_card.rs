@@ -48,13 +48,7 @@ fn unix_to_md(ts: u64) -> (u32, u32) {
 }
 
 /// Draw a single history entry card inside the history list area.
-pub fn draw(
-    f: &mut Frame,
-    task: &CompletedTask,
-    selected: bool,
-    theme: &ThemeColors,
-    area: Rect,
-) {
+pub fn draw(f: &mut Frame, task: &CompletedTask, selected: bool, theme: &ThemeColors, area: Rect) {
     let filename = task
         .dest
         .file_name()
@@ -108,7 +102,7 @@ pub fn draw(
         - short_name.chars().count() as i32
         - hint_len as i32
         - 1)
-        .max(0) as usize;
+    .max(0) as usize;
 
     let title_line = Line::from(vec![
         Span::styled(prefix, Style::default().fg(theme.success)),

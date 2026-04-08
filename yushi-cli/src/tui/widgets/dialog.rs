@@ -32,7 +32,9 @@ pub fn draw(f: &mut Frame, dialog: &ConfirmDialog, theme: &ThemeColors, area: Re
         .borders(Borders::ALL)
         .title(Span::styled(
             format!(" {} ", dialog.title),
-            Style::default().fg(theme.warning).add_modifier(Modifier::BOLD),
+            Style::default()
+                .fg(theme.warning)
+                .add_modifier(Modifier::BOLD),
         ))
         .border_style(Style::default().fg(theme.warning));
 

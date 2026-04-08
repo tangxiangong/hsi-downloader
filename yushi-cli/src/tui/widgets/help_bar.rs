@@ -15,16 +15,12 @@ pub fn draw(f: &mut Frame, app: &App, theme: &ThemeColors, area: Rect) {
             CurrentView::Tasks => {
                 "1/2/3:视图  ↑↓:导航  Tab/←→:筛选  a:添加  p:暂停  c:取消  d:删除  D:删文件  q:退出"
             }
-            CurrentView::History => {
-                "1/2/3:视图  ↑↓:导航  x:删除记录  C:清空全部  r:刷新  q:退出"
-            }
+            CurrentView::History => "1/2/3:视图  ↑↓:导航  x:删除记录  C:清空全部  r:刷新  q:退出",
             CurrentView::Settings => {
                 "1/2/3:视图  ↑↓:选择  Enter/e:编辑  ←→:切换主题  r:重载  q:退出"
             }
         },
-        InputMode::AddTask => {
-            "Tab:下一项  Shift+Tab:上一项  ←→:切换  Enter:确认  Esc:取消"
-        }
+        InputMode::AddTask => "Tab:下一项  Shift+Tab:上一项  ←→:切换  Enter:确认  Esc:取消",
         InputMode::EditSetting => "Enter:保存  Esc:取消",
         InputMode::Confirm => "←→:选择  Enter:确认  Esc:取消",
     };

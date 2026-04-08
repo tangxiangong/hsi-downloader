@@ -1,9 +1,9 @@
 use ratatui::{
+    Frame,
     layout::{Constraint, Layout, Rect},
     style::{Modifier, Style},
     text::Line,
     widgets::Paragraph,
-    Frame,
 };
 
 use crate::tui::app::{App, TaskFilter};

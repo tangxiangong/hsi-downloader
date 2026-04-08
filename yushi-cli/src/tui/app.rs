@@ -1,14 +1,11 @@
+use crate::{config::ConfigStore, tui::theme::ThemeColors};
 use anyhow::{Result, anyhow};
 use crossterm::event::{KeyCode, KeyEvent, KeyModifiers};
 use tokio::sync::mpsc;
 use yushi_core::{
-    AppConfig, DownloadHistory, DownloadTask, DownloaderEvent, Priority, ProgressEvent,
-    QueueEvent, TaskEvent, TaskStatus, YuShi, parse_speed_limit,
+    AppConfig, DownloadHistory, DownloadTask, DownloaderEvent, Priority, ProgressEvent, QueueEvent,
+    TaskEvent, TaskStatus, YuShi, config::AppTheme, parse_speed_limit,
 };
-use yushi_core::config::AppTheme;
-
-use crate::config::ConfigStore;
-use crate::tui::theme::ThemeColors;
 
 // ==================== Enums ====================
 
@@ -512,10 +509,8 @@ impl App {
                 } else {
                     self.input_mode = InputMode::EditSetting;
                     self.edit_buffer = field.current_value(&self.config).unwrap_or_default();
-                    self.status_message = format!(
-                        "编辑设置 {}，Enter 保存，Esc 取消",
-                        field.label()
-                    );
+                    self.status_message =
+                        format!("编辑设置 {}，Enter 保存，Esc 取消", field.label());
                 }
             }
             // Left / Right on Theme field also cycles the theme.
@@ -686,7 +681,14 @@ impl App {
 
         match self
             .queue
-            .add_task_with_options(url.clone(), output, state.priority, None, speed_limit, false)
+            .add_task_with_options(
+                url.clone(),
+                output,
+                state.priority,
+                None,
+                speed_limit,
+                false,
+            )
             .await
         {
             Ok(task_id) => {
@@ -844,7 +846,6 @@ impl App {
         }
         Ok(())
     }
-
 }
 
 // ==================== SettingField impl ====================

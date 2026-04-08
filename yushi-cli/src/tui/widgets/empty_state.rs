@@ -9,14 +9,7 @@ use ratatui::{
 use crate::tui::theme::ThemeColors;
 
 /// Draw an empty-state placeholder when a list has no items.
-pub fn draw(
-    f: &mut Frame,
-    icon: &str,
-    message: &str,
-    hint: &str,
-    theme: &ThemeColors,
-    area: Rect,
-) {
+pub fn draw(f: &mut Frame, icon: &str, message: &str, hint: &str, theme: &ThemeColors, area: Rect) {
     // Vertically center a 4-line block: icon, blank, message, hint
     let chunks = Layout::vertical([
         Constraint::Min(0),    // top flex

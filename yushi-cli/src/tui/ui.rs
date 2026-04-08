@@ -29,13 +29,13 @@ pub fn draw(f: &mut Frame, app: &App) {
         vec![
             Constraint::Length(1), // header
             Constraint::Length(1), // filter tabs
-            Constraint::Min(3),   // content
+            Constraint::Min(3),    // content
             Constraint::Length(1), // help
         ]
     } else {
         vec![
             Constraint::Length(1), // header
-            Constraint::Min(3),   // content
+            Constraint::Min(3),    // content
             Constraint::Length(1), // help
         ]
     };
@@ -71,12 +71,7 @@ pub fn draw(f: &mut Frame, app: &App) {
     }
 }
 
-fn draw_header(
-    f: &mut Frame,
-    app: &App,
-    theme: &super::theme::ThemeColors,
-    area: Rect,
-) {
+fn draw_header(f: &mut Frame, app: &App, theme: &super::theme::ThemeColors, area: Rect) {
     let (title, count_str) = match app.current_view {
         CurrentView::Tasks => {
             let count = app.filtered_indices.len();
@@ -97,9 +92,7 @@ fn draw_header(
     let line = Line::from(vec![
         Span::styled(
             title_display,
-            Style::default()
-                .fg(theme.text)
-                .add_modifier(Modifier::BOLD),
+            Style::default().fg(theme.text).add_modifier(Modifier::BOLD),
         ),
         Span::raw(" ".repeat(padding)),
         Span::styled(count_display, Style::default().fg(theme.text_secondary)),
@@ -108,12 +101,7 @@ fn draw_header(
     f.render_widget(Paragraph::new(line), area);
 }
 
-fn draw_content(
-    f: &mut Frame,
-    app: &App,
-    theme: &super::theme::ThemeColors,
-    area: Rect,
-) {
+fn draw_content(f: &mut Frame, app: &App, theme: &super::theme::ThemeColors, area: Rect) {
     match app.current_view {
         CurrentView::Tasks => draw_tasks_content(f, app, theme, area),
         CurrentView::History => draw_history_content(f, app, theme, area),
@@ -121,12 +109,7 @@ fn draw_content(
     }
 }
 
-fn draw_tasks_content(
-    f: &mut Frame,
-    app: &App,
-    theme: &super::theme::ThemeColors,
-    area: Rect,
-) {
+fn draw_tasks_content(f: &mut Frame, app: &App, theme: &super::theme::ThemeColors, area: Rect) {
     if app.filtered_indices.is_empty() {
         let (hint, msg) = match app.filter {
             TaskFilter::All => ("按 a 添加新任务", "暂无下载任务"),
@@ -170,12 +153,7 @@ fn draw_tasks_content(
     }
 }
 
-fn draw_history_content(
-    f: &mut Frame,
-    app: &App,
-    theme: &super::theme::ThemeColors,
-    area: Rect,
-) {
+fn draw_history_content(f: &mut Frame, app: &App, theme: &super::theme::ThemeColors, area: Rect) {
     if app.history.completed_tasks.is_empty() {
         widgets::empty_state::draw(f, "📋", "暂无下载记录", "", theme, area);
         return;

@@ -94,7 +94,11 @@ impl ThemeColors {
                     .map(|bg| bg >= 8)
                     .unwrap_or(false);
 
-                if is_light { Self::light() } else { Self::dark() }
+                if is_light {
+                    Self::light()
+                } else {
+                    Self::dark()
+                }
             }
         }
     }

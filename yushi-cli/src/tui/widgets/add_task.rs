@@ -33,7 +33,9 @@ pub fn draw(f: &mut Frame, state: &AddTaskState, theme: &ThemeColors, area: Rect
         .borders(Borders::ALL)
         .title(Span::styled(
             " 添加下载任务 ",
-            Style::default().fg(theme.primary).add_modifier(Modifier::BOLD),
+            Style::default()
+                .fg(theme.primary)
+                .add_modifier(Modifier::BOLD),
         ))
         .border_style(Style::default().fg(theme.primary));
 
@@ -102,10 +104,7 @@ pub fn draw(f: &mut Frame, state: &AddTaskState, theme: &ThemeColors, area: Rect
 
     // --- Error ---
     if let Some(err) = &state.error {
-        let err_para = Paragraph::new(Span::styled(
-            err.as_str(),
-            Style::default().fg(theme.error),
-        ));
+        let err_para = Paragraph::new(Span::styled(err.as_str(), Style::default().fg(theme.error)));
         f.render_widget(err_para, chunks[8]);
     }
 
