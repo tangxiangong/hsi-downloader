@@ -49,8 +49,7 @@ impl AppState {
                 let Some(completed) = CompletedTask::from_task(&task) else {
                     return;
                 };
-                let _ =
-                    DownloadHistory::append_completed_to_file(&history_path, completed).await;
+                let _ = DownloadHistory::append_completed_to_file(&history_path, completed).await;
             }
         });
 

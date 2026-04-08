@@ -5,6 +5,9 @@
   "type": "module",
   "scripts": {
     "dev": "vite",
+    "typecheck": "tsc --noEmit",
+    "test": "bun run typecheck",
+    "ci": "bun run test && bun run build",
     "build": "vite build",
     "preview": "vite preview"
   },

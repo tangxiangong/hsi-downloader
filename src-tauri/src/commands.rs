@@ -104,10 +104,7 @@ pub async fn get_history(state: State<'_, AppState>) -> Result<Vec<CompletedTask
 }
 
 #[tauri::command]
-pub async fn remove_history(
-    state: State<'_, AppState>,
-    task_id: String,
-) -> Result<(), String> {
+pub async fn remove_history(state: State<'_, AppState>, task_id: String) -> Result<(), String> {
     let (new_history, _) = DownloadHistory::remove_from_file(&state.history_path, &task_id)
         .await
         .map_err(|e| e.to_string())?;
@@ -166,8 +163,5 @@ pub async fn infer_destination(
     url: String,
     directory: PathBuf,
 ) -> Result<PathBuf, String> {
-    Ok(state
-        .queue
-        .infer_destination_in_dir(&url, directory)
-        .await)
+    Ok(state.queue.infer_destination_in_dir(&url, directory).await)
 }

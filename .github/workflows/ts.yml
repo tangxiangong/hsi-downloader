@@ -1,0 +1,40 @@
+name: TypeScript CI
+
+on:
+  push:
+    branches: ["main"]
+    paths:
+      - "src-ui/**"
+      - "src-tauri/tauri.conf.json"
+      - "!**/*.md"
+  pull_request:
+    branches: ["main"]
+    paths:
+      - "src-ui/**"
+      - "src-tauri/tauri.conf.json"
+      - "!**/*.md"
+
+permissions:
+  contents: read
+
+jobs:
+  ts-build-test:
+    runs-on: ubuntu-latest
+    defaults:
+      run:
+        working-directory: src-ui
+
+    steps:
+      - uses: actions/checkout@v4
+
+      - name: Setup Bun
+        uses: oven-sh/setup-bun@v2
+
+      - name: Install dependencies
+        run: bun install --frozen-lockfile
+
+      - name: TypeScript check
+        run: bun run test
+
+      - name: Build UI
+        run: bun run build
