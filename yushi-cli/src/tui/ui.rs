@@ -1,4 +1,4 @@
-use super::app::{App, CurrentView, InputMode, SelectedPanel};
+use super::app::{App, CurrentView, InputMode, SETTINGS_FIELDS};
 use crate::ui::format_size;
 use ratatui::{
     Frame,
@@ -29,29 +29,13 @@ pub fn draw(f: &mut Frame, app: &App) {
 fn draw_header(f: &mut Frame, app: &App, area: Rect) {
     let title = format!(
         "YuShi 下载管理器  |  [1]任务 [{}] [2]历史 [{}] [3]设置 [{}]",
-        if app.current_view == CurrentView::Tasks {
-            "*"
-        } else {
-            " "
-        },
-        if app.current_view == CurrentView::History {
-            "*"
-        } else {
-            " "
-        },
-        if app.current_view == CurrentView::Settings {
-            "*"
-        } else {
-            " "
-        }
+        if app.current_view == CurrentView::Tasks { "*" } else { " " },
+        if app.current_view == CurrentView::History { "*" } else { " " },
+        if app.current_view == CurrentView::Settings { "*" } else { " " }
     );
 
     let title = Paragraph::new(title)
-        .style(
-            Style::default()
-                .fg(Color::Cyan)
-                .add_modifier(Modifier::BOLD),
-        )
+        .style(Style::default().fg(Color::Cyan).add_modifier(Modifier::BOLD))
         .alignment(Alignment::Center)
         .block(Block::default().borders(Borders::ALL));
     f.render_widget(title, area);
@@ -81,10 +65,11 @@ fn draw_main_content(f: &mut Frame, app: &App, area: Rect) {
 
 fn draw_task_list(f: &mut Frame, app: &App, area: Rect) {
     let items: Vec<ListItem> = app
-        .tasks
+        .filtered_indices
         .iter()
         .enumerate()
-        .map(|(i, task)| {
+        .filter_map(|(fi, &real_i)| app.tasks.get(real_i).map(|task| (fi, task)))
+        .map(|(fi, task)| {
             let status_icon = match task.status {
                 TaskStatus::Pending => "⏸",
                 TaskStatus::Downloading => "⬇",
@@ -135,9 +120,7 @@ fn draw_task_list(f: &mut Frame, app: &App, area: Rect) {
                 Line::from(vec![
                     Span::styled(
                         format!("{} ", status_icon),
-                        Style::default()
-                            .fg(status_color)
-                            .add_modifier(Modifier::BOLD),
+                        Style::default().fg(status_color).add_modifier(Modifier::BOLD),
                     ),
                     Span::styled(filename, Style::default().add_modifier(Modifier::BOLD)),
                 ]),
@@ -148,10 +131,8 @@ fn draw_task_list(f: &mut Frame, app: &App, area: Rect) {
                 ]),
             ];
 
-            let style = if i == app.selected_index {
-                Style::default()
-                    .bg(Color::DarkGray)
-                    .add_modifier(Modifier::BOLD)
+            let style = if fi == app.selected_index {
+                Style::default().bg(Color::DarkGray).add_modifier(Modifier::BOLD)
             } else {
                 Style::default()
             };
@@ -160,29 +141,17 @@ fn draw_task_list(f: &mut Frame, app: &App, area: Rect) {
         })
         .collect();
 
-    let border_style = if app.selected_panel == SelectedPanel::TaskList {
-        Style::default().fg(Color::Cyan)
-    } else {
-        Style::default()
-    };
-
     let list = List::new(items).block(
         Block::default()
             .borders(Borders::ALL)
             .title("任务列表")
-            .border_style(border_style),
+            .border_style(Style::default().fg(Color::Cyan)),
     );
 
     f.render_widget(list, area);
 }
 
 fn draw_task_details(f: &mut Frame, app: &App, area: Rect) {
-    let border_style = if app.selected_panel == SelectedPanel::Details {
-        Style::default().fg(Color::Cyan)
-    } else {
-        Style::default()
-    };
-
     if let Some(task) = app.get_selected_task() {
         let chunks = Layout::default()
             .direction(Direction::Vertical)
@@ -232,12 +201,7 @@ fn draw_task_details(f: &mut Frame, app: &App, area: Rect) {
         }
 
         let details = Paragraph::new(lines)
-            .block(
-                Block::default()
-                    .borders(Borders::ALL)
-                    .title("任务详情")
-                    .border_style(border_style),
-            )
+            .block(Block::default().borders(Borders::ALL).title("任务详情"))
             .wrap(Wrap { trim: true });
 
         f.render_widget(details, chunks[0]);
@@ -262,12 +226,7 @@ fn draw_task_details(f: &mut Frame, app: &App, area: Rect) {
         f.render_widget(gauge, chunks[1]);
     } else {
         let empty = Paragraph::new("没有选中的任务")
-            .block(
-                Block::default()
-                    .borders(Borders::ALL)
-                    .title("任务详情")
-                    .border_style(border_style),
-            )
+            .block(Block::default().borders(Borders::ALL).title("任务详情"))
             .alignment(Alignment::Center);
         f.render_widget(empty, area);
     }
@@ -286,9 +245,7 @@ fn draw_history_list(f: &mut Frame, app: &App, area: Rect) {
                 .and_then(|n| n.to_str())
                 .unwrap_or("unknown");
             let style = if i == app.history_index {
-                Style::default()
-                    .bg(Color::DarkGray)
-                    .add_modifier(Modifier::BOLD)
+                Style::default().bg(Color::DarkGray).add_modifier(Modifier::BOLD)
             } else {
                 Style::default()
             };
@@ -299,10 +256,7 @@ fn draw_history_list(f: &mut Frame, app: &App, area: Rect) {
                     Span::styled(filename, Style::default().add_modifier(Modifier::BOLD)),
                 ]),
                 Line::from(vec![
-                    Span::styled(
-                        format_size(task.total_size),
-                        Style::default().fg(Color::Gray),
-                    ),
+                    Span::styled(format_size(task.total_size), Style::default().fg(Color::Gray)),
                     Span::raw("  "),
                     Span::styled(
                         format!("平均 {}/s", format_size(task.avg_speed)),
@@ -318,13 +272,7 @@ fn draw_history_list(f: &mut Frame, app: &App, area: Rect) {
         Block::default()
             .borders(Borders::ALL)
             .title("历史记录")
-            .border_style(
-                Style::default().fg(if app.selected_panel == SelectedPanel::TaskList {
-                    Color::Cyan
-                } else {
-                    Color::White
-                }),
-            ),
+            .border_style(Style::default().fg(Color::Cyan)),
     );
     f.render_widget(list, area);
 }
@@ -357,14 +305,12 @@ fn draw_history_details(f: &mut Frame, app: &App, area: Rect) {
 }
 
 fn draw_settings_list(f: &mut Frame, app: &App, area: Rect) {
-    let items: Vec<ListItem> = super::app::SETTINGS_FIELDS
+    let items: Vec<ListItem> = SETTINGS_FIELDS
         .iter()
         .enumerate()
         .map(|(i, field)| {
             let style = if i == app.setting_index {
-                Style::default()
-                    .bg(Color::DarkGray)
-                    .add_modifier(Modifier::BOLD)
+                Style::default().bg(Color::DarkGray).add_modifier(Modifier::BOLD)
             } else {
                 Style::default()
             };
@@ -385,13 +331,7 @@ fn draw_settings_list(f: &mut Frame, app: &App, area: Rect) {
         Block::default()
             .borders(Borders::ALL)
             .title("设置")
-            .border_style(
-                Style::default().fg(if app.selected_panel == SelectedPanel::TaskList {
-                    Color::Cyan
-                } else {
-                    Color::White
-                }),
-            ),
+            .border_style(Style::default().fg(Color::Cyan)),
     );
     f.render_widget(list, area);
 }
@@ -414,7 +354,7 @@ fn draw_settings_details(f: &mut Frame, app: &App, area: Rect) {
 
     if app.input_mode == InputMode::EditSetting {
         lines.push(Line::from(""));
-        lines.push(detail_line("输入中", &app.input_buffer));
+        lines.push(detail_line("输入中", &app.edit_buffer));
     }
 
     let details = Paragraph::new(lines)
@@ -425,7 +365,9 @@ fn draw_settings_details(f: &mut Frame, app: &App, area: Rect) {
 
 fn draw_status_bar(f: &mut Frame, app: &App, area: Rect) {
     let status_text = match app.input_mode {
-        InputMode::AddUrl | InputMode::EditSetting => format!("输入: {}", app.input_buffer),
+        InputMode::EditSetting => format!("输入: {}", app.edit_buffer),
+        InputMode::AddTask => "添加任务中...".to_string(),
+        InputMode::Confirm => "确认操作...".to_string(),
         InputMode::Normal => app.status_message.clone(),
     };
 
@@ -440,17 +382,18 @@ fn draw_help(f: &mut Frame, app: &App, area: Rect) {
     let help_text = match app.input_mode {
         InputMode::Normal => match app.current_view {
             CurrentView::Tasks => {
-                "1/2/3:切视图 | q:退出 | ↑↓/jk:导航 | Tab:切面板 | a:添加 | p:暂停/恢复 | c:取消 | d:删除 | C:清空 | r:刷新"
+                "1/2/3:切视图 | q:退出 | ↑↓/jk:导航 | Tab/←→:切过滤 | a:添加 | p:暂停/恢复 | c:取消 | d:删除 | D:删除含文件 | r:刷新"
             }
-            CurrentView::History => "1/2/3:切视图 | q:退出 | ↑↓/jk:导航 | x:删除历史 | r:刷新历史",
+            CurrentView::History => {
+                "1/2/3:切视图 | q:退出 | ↑↓/jk:导航 | C:清空历史 | r:刷新历史"
+            }
             CurrentView::Settings => {
-                "1/2/3:切视图 | q:退出 | ↑↓/jk:选择字段 | Enter/e:编辑 | r:重载配置"
+                "1/2/3:切视图 | q:退出 | ↑↓/jk:选择字段 | Enter/e:编辑/切换主题 | ←→:切换主题 | r:重载配置"
             }
         },
-        InputMode::AddUrl => {
-            "Enter:确认 | Esc:取消 | 格式: URL|输出路径|优先级(high/normal/low)|限速"
-        }
+        InputMode::AddTask => "Tab:下一字段 | Shift+Tab:上一字段 | ←→:切换选项 | Enter:确认/下一步 | Esc:取消",
         InputMode::EditSetting => "Enter:保存设置 | Esc:取消编辑",
+        InputMode::Confirm => "←→:选择 | Enter:确认 | Esc:取消",
     };
 
     let help = Paragraph::new(help_text)
