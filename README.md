@@ -1,12 +1,15 @@
-# 驭时
+# 驭时 (YuShi)
 
-YuShi (驭时) 是一个用 Rust 构建的下载管理器与下载核心库，采用纯 Rust 工作区：
+YuShi (驭时) 是一个用 Rust 构建的异步下载管理器，提供桌面 GUI 和命令行两种界面。
 
-- **根包 (`yushi`)** — 基于 `gpui` + `gpui-component` 的桌面 GUI，源码位于 `src/`
-- **`yushi-core`** — 下载引擎、队列、共享配置与下载历史
-- **`yushi-cli`** — 命令行接口，默认启用 `ratatui` TUI
+## 工作区结构
 
-GUI、CLI、TUI 都直接调用 `yushi-core`，无 IPC 层。
+| 模块            | 说明                                                                                              |
+| --------------- | ------------------------------------------------------------------------------------------------- |
+| **src-tauri/**  | Tauri v2 桌面应用，通过 `#[tauri::command]` 暴露核心 API，并经 Tauri 事件系统将实时进度推送到前端 |
+| **src-ui/**     | SolidJS + TailwindCSS + DaisyUI 前端，Vite 构建，Bun 包管理                                       |
+| **yushi-core/** | 共享下载引擎、队列管理、配置、历史记录与存储路径                                                  |
+| **yushi-cli/**  | 命令行接口（`clap`），默认启用 `ratatui` TUI                                                      |
 
 ## 核心能力
 
@@ -17,12 +20,19 @@ GUI、CLI、TUI 都直接调用 `yushi-core`，无 IPC 层。
 - 代理支持：HTTP / HTTPS / SOCKS5
 - 共享配置：下载路径、并发数、分块大小、超时、User-Agent、主题
 - 共享下载历史：完成记录、搜索、删除、清空
+- 系统托盘：关闭窗口时最小化到托盘
 
 ## 运行与构建
 
 ```bash
-# 桌面 GUI（根包即桌面应用）
-cargo run
+# 桌面 GUI（Tauri 开发模式，同时启动前后端）
+cargo tauri dev
+
+# 生产构建
+cargo tauri build
+
+# 仅前端开发
+cd src-ui && bun run dev
 
 # CLI
 cargo run -p yushi-cli -- --help
@@ -36,22 +46,35 @@ cargo clippy --workspace --all-targets --all-features
 cargo test --workspace --all-features
 ```
 
+## 架构概要
+
+```
+┌─────────────┐   Tauri Events    ┌──────────────┐
+│  SolidJS    │ ◄──────────────── │  src-tauri   │
+│  前端       │ ──────────────► │  后端        │
+└─────────────┘   invoke()        └──────┬───────┘
+                                         │
+                                         ▼
+                                  ┌──────────────┐
+                                  │  yushi-core  │
+                                  │  下载引擎     │
+                                  └──────────────┘
+```
+
+- **前端 → 后端**：SolidJS 通过 `@tauri-apps/api` 的 `invoke()` 调用 `#[tauri::command]` 处理函数
+- **后端 → 前端**：`yushi-core` 产生 `DownloaderEvent`，Tauri 后端通过 `app_handle.emit()` 推送到前端
+- **状态管理**：前端使用响应式 Store（`task-store`、`history-store`、`config-store`、`theme-store`）监听事件并同步
+- **主题**：DaisyUI 主题通过根元素 `data-theme` 属性切换，支持 亮色 / 暗色 / 跟随系统
+
 ## 共享数据位置
 
 配置、历史和队列文件统一存储在 `dirs::config_dir()/yushi/`（macOS/Linux 下为 `~/.config/yushi/`）：
 
-| 文件 | 用途 |
-|------|------|
-| `config.json` | 应用配置（下载路径、并发数、代理等） |
-| `history.json` | 已完成下载记录 |
-| `queue.json` | 队列任务状态（支持断点续传） |
-
-
-## 桌面应用
-
-应用状态由一个共享 `Entity<AppState>` 驱动。`yushi-core` 通过 `tokio::sync::mpsc` 广播 `DownloaderEvent`，GUI 主循环轮询事件并触发 GPUI 响应式重渲染。
-
-窗口根视图为 `gpui_component::Root`，通过 `render_dialog_layer` 和 `render_notification_layer` 渲染对话框与通知层。
+| 文件           | 用途                                 |
+| -------------- | ------------------------------------ |
+| `config.json`  | 应用配置（下载路径、并发数、代理等） |
+| `history.json` | 已完成下载记录                       |
+| `queue.json`   | 队列任务状态（支持断点续传）         |
 
 ## 许可证
 
