@@ -30,3 +30,9 @@ target/
 .claude/settings.json
 .superpowers/
 .worktrees/
+
+# Tauri
+src-tauri/icons/
+
+# Bun
+bun.lock
