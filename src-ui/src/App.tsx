@@ -1,18 +1,37 @@
-import type { Component } from "solid-js";
+import { type Component, createSignal, onMount, Match, Switch } from "solid-js";
+import Sidebar, { type Page } from "./components/Sidebar";
+import TasksPage from "./pages/TasksPage";
+import HistoryPage from "./pages/HistoryPage";
+import SettingsPage from "./pages/SettingsPage";
+import { loadConfig } from "./stores/config-store";
+import { loadTasks, setupTaskEvents } from "./stores/task-store";
+import { loadHistory } from "./stores/history-store";
 
 const App: Component = () => {
+  const [page, setPage] = createSignal<Page>("tasks");
+
+  onMount(async () => {
+    await loadConfig();
+    await loadTasks();
+    await loadHistory();
+    setupTaskEvents();
+  });
+
   return (
     <div class="flex h-screen">
-      <aside class="w-56 bg-base-100 border-r border-base-300 p-4">
-        <h1 class="text-xl font-bold mb-6">驭时</h1>
-        <ul class="menu">
-          <li><a class="active">任务</a></li>
-          <li><a>历史</a></li>
-          <li><a>设置</a></li>
-        </ul>
-      </aside>
-      <main class="flex-1 p-6 overflow-y-auto">
-        <p class="text-base-content">YuShi is running.</p>
+      <Sidebar current={page()} onChange={setPage} />
+      <main class="flex-1 p-6 overflow-y-auto bg-base-200">
+        <Switch>
+          <Match when={page() === "tasks"}>
+            <TasksPage />
+          </Match>
+          <Match when={page() === "history"}>
+            <HistoryPage />
+          </Match>
+          <Match when={page() === "settings"}>
+            <SettingsPage />
+          </Match>
+        </Switch>
       </main>
     </div>
   );
