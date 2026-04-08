@@ -2,9 +2,10 @@
 
 mod commands;
 mod state;
+mod tray;
 
 use state::AppState;
-use tauri::{Emitter, Manager};
+use tauri::{Emitter, Manager, WindowEvent};
 
 fn main() {
     tauri::Builder::default()
@@ -27,6 +28,20 @@ fn main() {
                     }
                 });
             });
+
+            // Setup tray icon
+            tray::setup_tray(app.handle())?;
+
+            // Hide window on close instead of quitting
+            if let Some(window) = app.get_webview_window("main") {
+                let win = window.clone();
+                window.on_window_event(move |event| {
+                    if let WindowEvent::CloseRequested { api, .. } = event {
+                        api.prevent_close();
+                        let _ = win.hide();
+                    }
+                });
+            }
 
             Ok(())
         })
