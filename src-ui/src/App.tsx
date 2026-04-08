@@ -20,7 +20,7 @@ const App: Component = () => {
   return (
     <div class="flex h-screen">
       <Sidebar current={page()} onChange={setPage} />
-      <main class="flex-1 p-6 overflow-y-auto bg-base-200">
+      <main class="flex-1 p-5 overflow-y-auto bg-base-200">
         <Switch>
           <Match when={page() === "tasks"}>
             <TasksPage />

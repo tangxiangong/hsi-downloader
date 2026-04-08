@@ -22,7 +22,7 @@ const AddTaskDialog: Component<AddTaskDialogProps> = (props) => {
   async function handleSubmit(e: Event) {
     e.preventDefault();
     if (!url().trim()) {
-      setError("请输入下载链接");
+      setError("\u8bf7\u8f93\u5165\u4e0b\u8f7d\u94fe\u63a5");
       return;
     }
     setLoading(true);
@@ -40,11 +40,11 @@ const AddTaskDialog: Component<AddTaskDialogProps> = (props) => {
 
   return (
     <dialog class="modal modal-open">
-      <div class="modal-box">
-        <h3 class="font-bold text-lg">添加下载任务</h3>
+      <div class="modal-box bg-base-100 border border-base-300">
+        <h3 class="font-bold text-lg">{"\u6dfb\u52a0\u4e0b\u8f7d\u4efb\u52a1"}</h3>
         <form onSubmit={handleSubmit} class="mt-4 space-y-4">
           <div class="form-control">
-            <label class="label"><span class="label-text">下载链接</span></label>
+            <label class="label"><span class="label-text text-xs text-base-content/60">{"\u4e0b\u8f7d\u94fe\u63a5"}</span></label>
             <input
               type="text"
               class="input input-bordered w-full"
@@ -54,7 +54,7 @@ const AddTaskDialog: Component<AddTaskDialogProps> = (props) => {
             />
           </div>
           <div class="form-control">
-            <label class="label"><span class="label-text">保存位置</span></label>
+            <label class="label"><span class="label-text text-xs text-base-content/60">{"\u4fdd\u5b58\u4f4d\u7f6e"}</span></label>
             <div class="flex gap-2">
               <input
                 type="text"
@@ -63,17 +63,17 @@ const AddTaskDialog: Component<AddTaskDialogProps> = (props) => {
                 onInput={(e) => setDest(e.currentTarget.value)}
               />
               <button type="button" class="btn btn-ghost" onClick={pickDir}>
-                浏览
+                {"\u6d4f\u89c8"}
               </button>
             </div>
           </div>
           {error() && <p class="text-error text-sm">{error()}</p>}
           <div class="modal-action">
             <button type="button" class="btn btn-ghost" onClick={props.onClose}>
-              取消
+              {"\u53d6\u6d88"}
             </button>
             <button type="submit" class="btn btn-primary" disabled={loading()}>
-              {loading() ? "添加中..." : "添加"}
+              {loading() ? "\u6dfb\u52a0\u4e2d..." : "\u6dfb\u52a0"}
             </button>
           </div>
         </form>

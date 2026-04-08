@@ -1,6 +1,6 @@
 import { type Component, Show } from "solid-js";
 import type { DownloadTask } from "../lib/types";
-import { formatBytes, formatSpeed, formatEta, statusLabel, statusBadgeClass } from "../lib/format";
+import { formatBytes, formatSpeed, formatEta, statusLabel, getFileIcon, progressClass } from "../lib/format";
 import { pauseTask, resumeTask, cancelTask, removeTask, removeTaskWithFile } from "../lib/commands";
 import { refreshTasks } from "../stores/task-store";
 
@@ -39,57 +39,62 @@ const TaskCard: Component<TaskCardProps> = (props) => {
   }
 
   return (
-    <div class="card bg-base-100 shadow-sm">
+    <div class="task-card card bg-base-100 border border-base-300">
       <div class="card-body p-4">
-        <div class="flex items-center justify-between">
-          <div class="flex-1 min-w-0">
-            <h3 class="font-medium truncate">{filename()}</h3>
-            <p class="text-xs text-base-content/50 truncate">{t().url}</p>
+        {/* Row 1: Icon + Info + Actions */}
+        <div class="flex items-center gap-3">
+          <div class="w-9 h-9 rounded-lg bg-base-300 flex items-center justify-center text-lg shrink-0">
+            {getFileIcon(filename())}
           </div>
-          <span class={`badge ${statusBadgeClass(t().status)} ml-2`}>
-            {statusLabel(t().status)}
-          </span>
+          <div class="flex-1 min-w-0">
+            <h3 class="text-sm font-medium truncate">{filename()}</h3>
+            <p class="text-xs text-base-content/40 mt-0.5">
+              <Show when={t().status === "Downloading"} fallback={
+                <span>
+                  {formatBytes(t().total_size > 0 ? t().total_size : t().downloaded)}
+                  {t().status !== "Pending" && ` \u00b7 ${statusLabel(t().status)}`}
+                </span>
+              }>
+                <span>
+                  {formatBytes(t().downloaded)} / {formatBytes(t().total_size)} \u00b7 {formatSpeed(t().speed)} \u00b7 {formatEta(t().eta)}
+                </span>
+              </Show>
+            </p>
+          </div>
+          <div class="flex items-center gap-1 shrink-0">
+            <Show when={t().status === "Downloading"}>
+              <button class="btn-icon" onClick={handlePause} title="\u6682\u505c">{"\u23f8"}</button>
+            </Show>
+            <Show when={t().status === "Paused"}>
+              <button class="btn-icon" onClick={handleResume} title="\u6062\u590d">{"\u25b6"}</button>
+            </Show>
+            <Show when={t().status === "Downloading" || t().status === "Paused" || t().status === "Pending"}>
+              <button class="btn-icon hover:!text-error" onClick={handleCancel} title="\u53d6\u6d88">{"\u2715"}</button>
+            </Show>
+            <Show when={t().status === "Completed" || t().status === "Failed" || t().status === "Cancelled"}>
+              <button class="btn-icon" onClick={handleRemove} title="\u79fb\u9664">{"\u2715"}</button>
+              <button class="btn-icon hover:!text-error" onClick={handleRemoveWithFile} title="\u5220\u9664\u6587\u4ef6">{"\ud83d\uddd1"}</button>
+            </Show>
+          </div>
         </div>
 
-        <Show when={t().status === "Downloading" || t().total_size > 0}>
-          <div class="mt-2">
+        {/* Row 2: Progress bar */}
+        <Show when={t().total_size > 0 || t().status === "Downloading"}>
+          <div class="flex items-center gap-2 mt-2">
             <progress
-              class="progress progress-info w-full"
+              class={`progress h-1.5 flex-1 ${progressClass(t().status)}`}
               value={progress()}
               max="100"
             />
-            <div class="flex justify-between text-xs text-base-content/60 mt-1">
-              <span>
-                {formatBytes(t().downloaded)} / {formatBytes(t().total_size)}
-              </span>
-              <Show when={t().status === "Downloading"}>
-                <span>
-                  {formatSpeed(t().speed)} · {formatEta(t().eta)}
-                </span>
-              </Show>
-            </div>
+            <span class="text-xs font-medium text-base-content/60 w-10 text-right">
+              {Math.round(progress())}%
+            </span>
           </div>
         </Show>
 
         <Show when={t().error}>
           <p class="text-xs text-error mt-1">{t().error}</p>
         </Show>
-
-        <div class="card-actions justify-end mt-2">
-          <Show when={t().status === "Downloading"}>
-            <button class="btn btn-sm btn-ghost" onClick={handlePause}>暂停</button>
-          </Show>
-          <Show when={t().status === "Paused"}>
-            <button class="btn btn-sm btn-ghost" onClick={handleResume}>恢复</button>
-          </Show>
-          <Show when={t().status === "Downloading" || t().status === "Paused" || t().status === "Pending"}>
-            <button class="btn btn-sm btn-ghost text-error" onClick={handleCancel}>取消</button>
-          </Show>
-          <Show when={t().status === "Completed" || t().status === "Failed" || t().status === "Cancelled"}>
-            <button class="btn btn-sm btn-ghost" onClick={handleRemove}>移除</button>
-            <button class="btn btn-sm btn-ghost text-error" onClick={handleRemoveWithFile}>删除文件</button>
-          </Show>
-        </div>
       </div>
     </div>
   );

@@ -1,2 +1,123 @@
 @import "tailwindcss";
 @plugin "daisyui";
+
+@plugin "daisyui/theme" {
+  name: "yushi-dark";
+  default: false;
+  prefersdark: true;
+  color-scheme: dark;
+
+  --color-base-100: oklch(18% 0.02 270);
+  --color-base-200: oklch(14% 0.02 270);
+  --color-base-300: oklch(22% 0.025 270);
+  --color-base-content: oklch(90% 0.01 270);
+  --color-primary: oklch(60% 0.25 15);
+  --color-primary-content: oklch(98% 0.01 15);
+  --color-secondary: oklch(65% 0.2 250);
+  --color-secondary-content: oklch(98% 0.01 250);
+  --color-accent: oklch(70% 0.2 50);
+  --color-accent-content: oklch(15% 0.02 50);
+  --color-neutral: oklch(25% 0.02 270);
+  --color-neutral-content: oklch(85% 0.01 270);
+  --color-info: oklch(70% 0.15 230);
+  --color-info-content: oklch(98% 0.01 230);
+  --color-success: oklch(65% 0.2 145);
+  --color-success-content: oklch(98% 0.01 145);
+  --color-warning: oklch(80% 0.18 85);
+  --color-warning-content: oklch(20% 0.04 85);
+  --color-error: oklch(60% 0.25 25);
+  --color-error-content: oklch(98% 0.01 25);
+
+  --radius-selector: 0.5rem;
+  --radius-field: 0.5rem;
+  --radius-box: 0.75rem;
+  --size-selector: 0.25rem;
+  --size-field: 0.25rem;
+  --border: 1px;
+  --depth: 0;
+  --noise: 0;
+}
+
+@plugin "daisyui/theme" {
+  name: "yushi-light";
+  default: true;
+  prefersdark: false;
+  color-scheme: light;
+
+  --color-base-100: oklch(99% 0.005 270);
+  --color-base-200: oklch(96% 0.008 270);
+  --color-base-300: oklch(92% 0.01 270);
+  --color-base-content: oklch(25% 0.02 270);
+  --color-primary: oklch(55% 0.25 15);
+  --color-primary-content: oklch(98% 0.01 15);
+  --color-secondary: oklch(55% 0.2 250);
+  --color-secondary-content: oklch(98% 0.01 250);
+  --color-accent: oklch(65% 0.2 50);
+  --color-accent-content: oklch(15% 0.02 50);
+  --color-neutral: oklch(40% 0.02 270);
+  --color-neutral-content: oklch(98% 0.01 270);
+  --color-info: oklch(60% 0.15 230);
+  --color-info-content: oklch(98% 0.01 230);
+  --color-success: oklch(55% 0.2 145);
+  --color-success-content: oklch(98% 0.01 145);
+  --color-warning: oklch(75% 0.18 85);
+  --color-warning-content: oklch(20% 0.04 85);
+  --color-error: oklch(55% 0.25 25);
+  --color-error-content: oklch(98% 0.01 25);
+
+  --radius-selector: 0.5rem;
+  --radius-field: 0.5rem;
+  --radius-box: 0.75rem;
+  --size-selector: 0.25rem;
+  --size-field: 0.25rem;
+  --border: 1px;
+  --depth: 0;
+  --noise: 0;
+}
+
+/* Progress bar gradients */
+.progress-downloading::-webkit-progress-value {
+  background: linear-gradient(90deg, oklch(60% 0.25 15), oklch(70% 0.2 50));
+  border-radius: 999px;
+}
+.progress-downloading::-moz-progress-bar {
+  background: linear-gradient(90deg, oklch(60% 0.25 15), oklch(70% 0.2 50));
+  border-radius: 999px;
+}
+.progress-completed::-webkit-progress-value {
+  background: oklch(65% 0.2 145);
+  border-radius: 999px;
+}
+.progress-completed::-moz-progress-bar {
+  background: oklch(65% 0.2 145);
+  border-radius: 999px;
+}
+.progress-paused::-webkit-progress-value {
+  background: oklch(80% 0.18 85);
+  border-radius: 999px;
+}
+.progress-paused::-moz-progress-bar {
+  background: oklch(80% 0.18 85);
+  border-radius: 999px;
+}
+.progress-failed::-webkit-progress-value {
+  background: oklch(60% 0.25 25);
+  border-radius: 999px;
+}
+.progress-failed::-moz-progress-bar {
+  background: oklch(60% 0.25 25);
+  border-radius: 999px;
+}
+
+/* Icon button */
+.btn-icon {
+  @apply w-8 h-8 min-h-0 p-0 btn btn-ghost rounded-lg flex items-center justify-center text-base-content/60 hover:text-base-content hover:bg-base-300 transition-colors;
+}
+
+/* Task card hover */
+.task-card {
+  @apply transition-all duration-200;
+}
+.task-card:hover {
+  @apply shadow-md -translate-y-px;
+}

@@ -4,13 +4,13 @@ import type { AppTheme } from "../lib/types";
 const [theme, setThemeSignal] = createSignal<AppTheme>("system");
 
 function applyTheme(t: AppTheme) {
-  let resolved: "light" | "dark";
+  let resolved: string;
   if (t === "system") {
     resolved = window.matchMedia("(prefers-color-scheme: dark)").matches
-      ? "dark"
-      : "light";
+      ? "yushi-dark"
+      : "yushi-light";
   } else {
-    resolved = t;
+    resolved = t === "dark" ? "yushi-dark" : "yushi-light";
   }
   document.documentElement.setAttribute("data-theme", resolved);
 }

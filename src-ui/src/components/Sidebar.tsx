@@ -8,31 +8,39 @@ interface SidebarProps {
 }
 
 const Sidebar: Component<SidebarProps> = (props) => {
-  const items: { page: Page; label: string }[] = [
-    { page: "tasks", label: "任务" },
-    { page: "history", label: "历史" },
-    { page: "settings", label: "设置" },
+  const items: { page: Page; icon: string; label: string }[] = [
+    { page: "tasks", icon: "\u2193", label: "\u4efb\u52a1" },
+    { page: "history", icon: "\u2630", label: "\u5386\u53f2" },
+    { page: "settings", icon: "\u2699", label: "\u8bbe\u7f6e" },
   ];
 
   return (
-    <aside class="w-56 bg-base-100 border-r border-base-300 flex flex-col h-screen">
-      <div class="p-4 border-b border-base-300">
-        <h1 class="text-xl font-bold">驭时</h1>
-        <p class="text-xs text-base-content/50 mt-1">YuShi Download Manager</p>
+    <aside class="w-[60px] bg-base-100 border-r border-base-300 flex flex-col items-center h-screen py-4 gap-2">
+      {/* App Logo */}
+      <div class="w-9 h-9 rounded-lg bg-primary flex items-center justify-center text-primary-content font-bold text-sm mb-4">
+        驭
       </div>
-      <ul class="menu flex-1 p-2">
+
+      {/* Navigation */}
+      <nav class="flex flex-col items-center gap-1 flex-1">
         {items.map((item) => (
-          <li>
-            <a
-              class={props.current === item.page ? "active" : ""}
+          <div class="tooltip tooltip-right" data-tip={item.label}>
+            <button
+              class={`w-10 h-10 rounded-lg flex items-center justify-center text-lg transition-colors ${
+                props.current === item.page
+                  ? "bg-primary/15 text-primary"
+                  : "text-base-content/50 hover:text-base-content hover:bg-base-300"
+              }`}
               onClick={() => props.onChange(item.page)}
             >
-              {item.label}
-            </a>
-          </li>
+              {item.icon}
+            </button>
+          </div>
         ))}
-      </ul>
-      <div class="p-4 text-xs text-base-content/40">
+      </nav>
+
+      {/* Version */}
+      <div class="text-[9px] text-base-content/30 writing-vertical-rl">
         v0.1.0
       </div>
     </aside>

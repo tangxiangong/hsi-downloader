@@ -12,20 +12,26 @@ const HistoryPage: Component = () => {
 
   return (
     <div>
-      <div class="flex items-center justify-between mb-4">
-        <h2 class="text-2xl font-bold">历史</h2>
+      <div class="flex items-center justify-between mb-5">
+        <div>
+          <h2 class="text-xl font-bold">{"\u5386\u53f2"}</h2>
+          <p class="text-xs text-base-content/40 mt-0.5">{history.length} {"\u6761\u8bb0\u5f55"}</p>
+        </div>
         <button
           class="btn btn-ghost btn-sm text-error"
           onClick={handleClear}
           disabled={history.length === 0}
         >
-          清空历史
+          {"\u6e05\u7a7a"}
         </button>
       </div>
 
-      <div class="space-y-3">
+      <div class="space-y-2">
         <For each={history} fallback={
-          <div class="text-center text-base-content/50 py-12">暂无历史记录</div>
+          <div class="text-center text-base-content/30 py-16">
+            <div class="text-4xl mb-3">{"\u2630"}</div>
+            <p class="text-sm">{"\u6682\u65e0\u5386\u53f2\u8bb0\u5f55"}</p>
+          </div>
         }>
           {(task) => <HistoryCard task={task} />}
         </For>
