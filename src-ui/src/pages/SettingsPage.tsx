@@ -47,7 +47,7 @@ const SettingsPage: Component = () => {
         <p class="text-xs text-base-content/40 mt-0.5">{"\u5e94\u7528\u914d\u7f6e"}</p>
       </div>
 
-      <div class="space-y-4 max-w-2xl">
+      <div class="space-y-4">
         <div class="card bg-base-100 border border-base-300">
           <div class="card-body p-5">
             <h3 class="text-sm font-semibold mb-3">{"\u4e0b\u8f7d"}</h3>

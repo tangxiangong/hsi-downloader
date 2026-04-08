@@ -17,9 +17,7 @@ const Sidebar: Component<SidebarProps> = (props) => {
   return (
     <aside class="w-[60px] bg-base-100 border-r border-base-300 flex flex-col items-center h-screen py-4 gap-2">
       {/* App Logo */}
-      <div class="w-9 h-9 rounded-lg bg-primary flex items-center justify-center text-primary-content font-bold text-sm mb-4">
-        驭
-      </div>
+      <img src="/yushi.png" alt="驭时" class="w-9 h-9 rounded-lg mb-4" />
 
       {/* Navigation */}
       <nav class="flex flex-col items-center gap-1 flex-1">
