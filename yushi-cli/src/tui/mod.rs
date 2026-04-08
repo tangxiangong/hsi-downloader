@@ -1,5 +1,7 @@
 mod app;
 mod event;
+pub mod theme;
+pub mod widgets;
 mod ui;
 
 pub use app::App;
