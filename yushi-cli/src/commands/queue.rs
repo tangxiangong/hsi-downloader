@@ -7,8 +7,8 @@ use anyhow::{Result, anyhow};
 use console::style;
 use std::path::PathBuf;
 use yushi_core::{
-    ChecksumType, DownloaderEvent, Priority, ProgressEvent, TaskEvent, VerificationEvent,
-    parse_speed_limit,
+    ChecksumType, DownloadSource, DownloaderEvent, Priority, ProgressEvent, TaskEvent,
+    VerificationEvent, parse_speed_limit,
 };
 
 pub async fn execute(args: QueueArgs) -> Result<()> {
@@ -129,7 +129,12 @@ async fn list_tasks() -> Result<()> {
             yushi_core::TaskStatus::Cancelled => style("已取消").red(),
         };
 
-        println!("{} {}", style("●").bold(), status_str);
+        let source_label = match &task.source {
+            DownloadSource::BitTorrent { .. } => "[BT]",
+            DownloadSource::Http { .. } => "[HTTP]",
+        };
+
+        println!("{} {} {}", style("●").bold(), status_str, style(source_label).dim());
         println!("  ID: {}", style(&task.id[..16]).cyan());
         println!("  URL: {}", task.url);
         println!("  输出: {}", task.dest.display());
@@ -160,6 +165,15 @@ async fn list_tasks() -> Result<()> {
 
         if let Some(error) = &task.error {
             println!("  {}: {}", style("错误").red(), error);
+        }
+
+        if let Some(bt) = &task.bt_info {
+            println!(
+                "  BT: {}P · ↑{}/s · 已上传 {}",
+                bt.peers,
+                format_size(bt.upload_speed),
+                format_size(bt.uploaded)
+            );
         }
 
         println!();

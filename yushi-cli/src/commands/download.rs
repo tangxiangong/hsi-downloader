@@ -122,8 +122,10 @@ pub async fn execute(args: DownloadArgs) -> Result<()> {
                         bar.finish_with_message(format!("下载失败: {}", error));
                     }
                 }
-                ProgressEvent::BtStatus { .. } => {
-                    // BT status updates are informational, no progress bar action needed
+                ProgressEvent::BtStatus { peers, upload_speed, .. } => {
+                    if let Some(ref bar) = pb {
+                        bar.set_message(format!("{}P · ↑{}/s", peers, format_size(upload_speed)));
+                    }
                 }
             }
         }
