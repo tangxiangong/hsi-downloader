@@ -1,6 +1,6 @@
 import { createSignal, createMemo } from "solid-js";
 import { createStore } from "solid-js/store";
-import type { DownloadTask, DownloaderEvent } from "../lib/types";
+import type { DownloadTask, DownloaderEvent, TaskStatus } from "../lib/types";
 import { getTasks } from "../lib/commands";
 import { onDownloadEvent } from "../lib/events";
 import { refreshHistory } from "./history-store";
@@ -55,9 +55,31 @@ export async function refreshTasks() {
 
 export function setupTaskEvents() {
   onDownloadEvent(async (event: DownloaderEvent) => {
-    await refreshTasks();
-    if (event.type === "Task" && "Completed" in event.data) {
-      await refreshHistory();
+    if (event.type === "Progress" && "Updated" in event.data) {
+      const { task_id, downloaded, total, speed, eta } = event.data.Updated;
+      setTasks((t) => t.id === task_id, {
+        downloaded,
+        total_size: total,
+        speed,
+        eta,
+        status: "Downloading" as TaskStatus,
+      });
+    }
+    if (event.type === "Progress" && "BtStatus" in event.data) {
+      const { task_id, peers, seeders, upload_speed, uploaded } = event.data.BtStatus;
+      setTasks((t) => t.id === task_id, "bt_info", {
+        peers,
+        seeders,
+        upload_speed,
+        uploaded,
+        selected_files: null,
+      });
+    }
+    if (event.type === "Task") {
+      await refreshTasks();
+      if ("Completed" in event.data) {
+        await refreshHistory();
+      }
     }
   });
 }

@@ -56,7 +56,18 @@ const TaskCard: Component<TaskCardProps> = (props) => {
                 </span>
               }>
                 <span>
-                  {formatBytes(t().downloaded)} / {formatBytes(t().total_size)} \u00b7 {formatSpeed(t().speed)} \u00b7 {formatEta(t().eta)}
+                  {formatBytes(t().downloaded)} / {formatBytes(t().total_size)}
+                  {t().bt_info ? (
+                    <>
+                      {" \u00b7 \u2193"}{formatSpeed(t().speed)}{" \u00b7 \u2191"}{formatSpeed(t().bt_info!.upload_speed)}{" \u00b7 "}{t().bt_info!.peers}{"P"}
+                      {t().eta != null && ` \u00b7 \u5269\u4f59 ${formatEta(t().eta)}`}
+                    </>
+                  ) : (
+                    <>
+                      {" \u00b7 "}{formatSpeed(t().speed)}
+                      {t().eta != null && ` \u00b7 ${formatEta(t().eta)}`}
+                    </>
+                  )}
                 </span>
               </Show>
             </p>
