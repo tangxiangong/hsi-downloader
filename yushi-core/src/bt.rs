@@ -399,4 +399,23 @@ mod tests {
             "URL without extension should be detected as Http"
         );
     }
+
+    #[test]
+    fn detect_source_magnet_case_sensitive() {
+        // magnet: scheme is case-sensitive per BEP spec
+        let source = detect_source("MAGNET:?xt=urn:btih:abc");
+        assert!(matches!(source, DownloadSource::Http { .. }));
+    }
+
+    #[test]
+    fn detect_source_torrent_url_with_query_and_fragment() {
+        let source = detect_source("https://example.com/file.torrent?token=abc#section");
+        assert!(matches!(source, DownloadSource::BitTorrent { .. }));
+    }
+
+    #[test]
+    fn detect_source_empty_string() {
+        let source = detect_source("");
+        assert!(matches!(source, DownloadSource::Http { .. }));
+    }
 }
