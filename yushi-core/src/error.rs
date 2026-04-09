@@ -26,6 +26,8 @@ pub enum Error {
     CannotRemoveTaskInCurrentStatus,
     #[error("Storage path error: {0}")]
     PathError(String),
+    #[error("BitTorrent error: {0}")]
+    BtError(String),
     #[error("Unknown error")]
     Unknown,
 }
