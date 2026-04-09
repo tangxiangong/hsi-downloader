@@ -1,5 +1,7 @@
 use crate::{
     Error, Result,
+    bt::{BtEngine, detect_source, spawn_bt_progress_poller},
+    config::BtConfig,
     state::{ChunkState, DownloadState, QueueState, current_timestamp},
     types::{
         ChecksumType, CompletionCallback, Config, DownloadSource, DownloaderEvent, ProgressEvent,
@@ -47,6 +49,8 @@ pub struct YuShi {
     queue_state_write_lock: Arc<Mutex<()>>,
     queue_event_tx: mpsc::Sender<DownloaderEvent>,
     on_complete: Option<CompletionCallback>,
+    bt_engine: Arc<RwLock<Option<Arc<BtEngine>>>>,
+    bt_config: Arc<std::sync::RwLock<BtConfig>>,
 }
 
 const STATE_SAVE_INTERVAL: Duration = Duration::from_millis(750);
@@ -185,7 +189,7 @@ impl YuShi {
             max_concurrent: max_concurrent_downloads,
             ..Default::default()
         };
-        Self::with_config(config, max_concurrent_tasks, queue_state_path)
+        Self::with_config(config, max_concurrent_tasks, queue_state_path, BtConfig::default())
     }
 
     /// 使用自定义配置创建下载器
@@ -201,6 +205,7 @@ impl YuShi {
         config: Config,
         max_concurrent_tasks: usize,
         queue_state_path: PathBuf,
+        bt_config: BtConfig,
     ) -> (Self, mpsc::Receiver<DownloaderEvent>) {
         let (event_tx, event_rx) = mpsc::channel(1024);
         let (queue_state_save_tx, queue_state_save_rx) = mpsc::channel(64);
@@ -219,6 +224,8 @@ impl YuShi {
             queue_state_write_lock: Arc::clone(&queue_state_write_lock),
             queue_event_tx: event_tx,
             on_complete: None,
+            bt_engine: Arc::new(RwLock::new(None)),
+            bt_config: Arc::new(std::sync::RwLock::new(bt_config)),
         };
 
         Self::spawn_queue_state_save_worker(
@@ -283,6 +290,25 @@ impl YuShi {
 
         self.process_queue().await?;
         Ok(())
+    }
+
+    async fn ensure_bt_engine(&self) -> Result<Arc<BtEngine>> {
+        {
+            let engine = self.bt_engine.read().await;
+            if let Some(ref e) = *engine {
+                return Ok(Arc::clone(e));
+            }
+        }
+        let bt_config = self
+            .bt_config
+            .read()
+            .unwrap_or_else(|e| e.into_inner())
+            .clone();
+        let output_dir = dirs::download_dir().unwrap_or_else(|| PathBuf::from("/tmp"));
+        let engine = Arc::new(BtEngine::new(output_dir, &bt_config).await?);
+        let mut guard = self.bt_engine.write().await;
+        *guard = Some(Arc::clone(&engine));
+        Ok(engine)
     }
 
     pub async fn infer_destination_in_dir(&self, url: &str, directory: PathBuf) -> PathBuf {
@@ -888,7 +914,7 @@ impl YuShi {
 
         let task_id = Uuid::new_v4().to_string();
 
-        let source = DownloadSource::Http { url: url.clone() };
+        let source = detect_source(&url);
         let task = Task {
             id: task_id.clone(),
             url,
@@ -1090,9 +1116,57 @@ impl YuShi {
             });
 
             // 执行下载
-            let result = downloader
-                .download_internal(&task.url, task.dest.to_str().unwrap(), tx, task.speed_limit)
-                .await;
+            let result = match &task.source {
+                DownloadSource::BitTorrent { uri } => {
+                    let uri = uri.clone();
+                    let selected_files =
+                        task.bt_info.as_ref().and_then(|b| b.selected_files.clone());
+
+                    async {
+                        let engine = downloader.ensure_bt_engine().await?;
+                        let output_folder =
+                            task.dest.parent().map(|p| p.to_string_lossy().to_string());
+
+                        let (total_size, _name) = engine
+                            .add_torrent(&task_id_owned, &uri, output_folder, selected_files)
+                            .await?;
+
+                        if let Some(total) = total_size {
+                            let mut tasks_guard = tasks.write().await;
+                            if let Some(t) = tasks_guard.get_mut(&task_id_owned) {
+                                t.total_size = total;
+                            }
+                        }
+
+                        let seed_ratio = downloader
+                            .bt_config
+                            .read()
+                            .unwrap_or_else(|e| e.into_inner())
+                            .seed_ratio;
+
+                        let poller = spawn_bt_progress_poller(
+                            engine,
+                            task_id_owned.clone(),
+                            queue_event_tx.clone(),
+                            Arc::clone(&tasks),
+                            seed_ratio,
+                        );
+                        let _ = poller.await;
+                        Ok(())
+                    }
+                    .await
+                }
+                DownloadSource::Http { .. } => {
+                    downloader
+                        .download_internal(
+                            &task.url,
+                            task.dest.to_str().unwrap(),
+                            tx,
+                            task.speed_limit,
+                        )
+                        .await
+                }
+            };
 
             // 文件校验
             let checksum = task.checksum.clone();
@@ -1188,19 +1262,29 @@ impl YuShi {
 
     /// 暂停任务
     pub async fn pause_task(&self, task_id: &str) -> Result<()> {
+        let is_bt = {
+            let tasks = self.tasks.read().await;
+            let task = tasks.get(task_id).ok_or(Error::TaskNotFound)?;
+            matches!(task.source, DownloadSource::BitTorrent { .. })
+        };
+
         let mut tasks = self.tasks.write().await;
         let task = tasks.get_mut(task_id).ok_or(Error::TaskNotFound)?;
 
         if task.status == TaskStatus::Downloading {
-            // 取消当前的下载任务
-            let mut active = self.active_downloads.write().await;
-            if let Some(handle) = active.remove(task_id) {
-                handle.abort();
+            if is_bt {
+                if let Some(engine) = self.bt_engine.read().await.as_ref() {
+                    engine.pause(task_id).await?;
+                }
+            } else {
+                let mut active = self.active_downloads.write().await;
+                if let Some(handle) = active.remove(task_id) {
+                    handle.abort();
+                }
             }
 
             task.status = TaskStatus::Paused;
             drop(tasks);
-            drop(active);
 
             self.save_queue_state().await?;
             let _ = self
@@ -1210,7 +1294,9 @@ impl YuShi {
                 }))
                 .await;
 
-            self.process_queue().await?;
+            if !is_bt {
+                self.process_queue().await?;
+            }
         }
 
         Ok(())
@@ -1218,12 +1304,25 @@ impl YuShi {
 
     /// 恢复任务
     pub async fn resume_task(&self, task_id: &str) -> Result<()> {
+        let is_bt = {
+            let tasks = self.tasks.read().await;
+            let task = tasks.get(task_id).ok_or(Error::TaskNotFound)?;
+            matches!(task.source, DownloadSource::BitTorrent { .. })
+        };
+
         {
             let mut tasks = self.tasks.write().await;
             let task = tasks.get_mut(task_id).ok_or(Error::TaskNotFound)?;
 
             if task.status == TaskStatus::Paused {
-                task.status = TaskStatus::Pending;
+                if is_bt {
+                    if let Some(engine) = self.bt_engine.read().await.as_ref() {
+                        engine.resume(task_id).await?;
+                    }
+                    task.status = TaskStatus::Downloading;
+                } else {
+                    task.status = TaskStatus::Pending;
+                }
                 drop(tasks);
 
                 self.save_queue_state().await?;
@@ -1236,27 +1335,42 @@ impl YuShi {
             }
         }
 
-        self.process_queue().await?;
+        if !is_bt {
+            self.process_queue().await?;
+        }
         Ok(())
     }
 
     /// 取消任务
     pub async fn cancel_task(&self, task_id: &str) -> Result<()> {
-        // 如果正在下载，先停止
-        let mut active = self.active_downloads.write().await;
-        if let Some(handle) = active.remove(task_id) {
-            handle.abort();
+        let is_bt = {
+            let tasks = self.tasks.read().await;
+            tasks
+                .get(task_id)
+                .map(|t| matches!(t.source, DownloadSource::BitTorrent { .. }))
+                .unwrap_or(false)
+        };
+
+        if is_bt {
+            if let Some(engine) = self.bt_engine.read().await.as_ref() {
+                let _ = engine.cancel(task_id, true).await;
+            }
+        } else {
+            let mut active = self.active_downloads.write().await;
+            if let Some(handle) = active.remove(task_id) {
+                handle.abort();
+            }
+            drop(active);
         }
-        drop(active);
 
         let mut tasks = self.tasks.write().await;
         if let Some(task) = tasks.get_mut(task_id) {
             task.status = TaskStatus::Cancelled;
-
-            // 删除下载文件和状态文件
-            let _ = fs::remove_file(&task.dest).await;
-            let state_path = task.dest.with_extension("json");
-            let _ = fs::remove_file(state_path).await;
+            if !is_bt {
+                let _ = fs::remove_file(&task.dest).await;
+                let state_path = task.dest.with_extension("json");
+                let _ = fs::remove_file(state_path).await;
+            }
         }
         drop(tasks);
 
@@ -1268,7 +1382,6 @@ impl YuShi {
             }))
             .await;
 
-        // 处理队列中的下一个任务
         self.process_queue().await?;
 
         Ok(())
@@ -1382,7 +1495,8 @@ mod tests {
             ..Default::default()
         };
 
-        let (downloader, _) = YuShi::with_config(config, 1, temp_file("queue-state"));
+        let (downloader, _) =
+            YuShi::with_config(config, 1, temp_file("queue-state"), BtConfig::default());
         let state = downloader
             .build_chunked_state(
                 "https://example.com/file.bin",
