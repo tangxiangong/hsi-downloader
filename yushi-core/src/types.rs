@@ -270,6 +270,19 @@ impl Default for Config {
     }
 }
 
+#[derive(Debug, Clone, Deserialize)]
+pub struct AddTaskOptions {
+    pub url: String,
+    pub dest: PathBuf,
+    pub checksum: Option<ChecksumType>,
+    pub priority: Option<TaskPriority>,
+    pub speed_limit: Option<u64>,
+    #[serde(default)]
+    pub auto_rename_on_conflict: bool,
+    /// BT 任务：选择下载的文件索引列表
+    pub selected_files: Option<Vec<usize>>,
+}
+
 /// 下载配置（向后兼容）
 pub type DownloadConfig = Config;
 

@@ -4,7 +4,7 @@ use crate::{
     config::BtConfig,
     state::{ChunkState, DownloadState, QueueState, current_timestamp},
     types::{
-        BtTaskInfo, ChecksumType, CompletionCallback, Config, DownloadSource, DownloaderEvent,
+        AddTaskOptions, BtTaskInfo, CompletionCallback, Config, DownloadSource, DownloaderEvent,
         ProgressEvent, Task, TaskEvent, TaskPriority, TaskStatus, TorrentFileInfo,
         VerificationEvent,
     },
@@ -887,8 +887,16 @@ impl YuShi {
     /// 返回任务 ID
     pub async fn add_task(&self, url: String, dest: PathBuf) -> Result<String> {
         let speed_limit = self.runtime_config().speed_limit;
-        self.add_task_with_options(url, dest, TaskPriority::Normal, None, speed_limit, false, None)
-            .await
+        self.add_task_with_options(AddTaskOptions {
+            url,
+            dest,
+            priority: Some(TaskPriority::Normal),
+            checksum: None,
+            speed_limit,
+            auto_rename_on_conflict: false,
+            selected_files: None,
+        })
+        .await
     }
 
     /// 添加下载任务到队列（带选项）
@@ -902,30 +910,21 @@ impl YuShi {
     ///
     /// # 返回
     /// 返回任务 ID
-    pub async fn add_task_with_options(
-        &self,
-        url: String,
-        mut dest: PathBuf,
-        priority: TaskPriority,
-        checksum: Option<ChecksumType>,
-        speed_limit: Option<u64>,
-        auto_rename_on_conflict: bool,
-        selected_files: Option<Vec<usize>>,
-    ) -> Result<String> {
-        let speed_limit = speed_limit.or(self.runtime_config().speed_limit);
+    pub async fn add_task_with_options(&self, mut options: AddTaskOptions) -> Result<String> {
+        let speed_limit = options.speed_limit.or(self.runtime_config().speed_limit);
 
         // 自动重命名
-        if auto_rename_on_conflict && dest.exists() {
-            dest = auto_rename(&dest);
+        if options.auto_rename_on_conflict && options.dest.exists() {
+            options.dest = auto_rename(&options.dest);
         }
 
         let task_id = Uuid::new_v4().to_string();
 
-        let source = detect_source(&url);
+        let source = detect_source(&options.url);
         let task = Task {
             id: task_id.clone(),
-            url,
-            dest,
+            url: options.url.clone(),
+            dest: options.dest.clone(),
             status: TaskStatus::Pending,
             total_size: 0,
             downloaded: 0,
@@ -934,14 +933,14 @@ impl YuShi {
                 .unwrap()
                 .as_secs(),
             error: None,
-            priority,
+            priority: options.priority.unwrap_or(TaskPriority::Normal),
             speed: 0,
             eta: None,
             headers: HashMap::new(),
-            checksum,
+            checksum: options.checksum.clone(),
             speed_limit,
             source,
-            bt_info: selected_files.map(|files| BtTaskInfo {
+            bt_info: options.selected_files.clone().map(|files| BtTaskInfo {
                 selected_files: Some(files),
                 ..Default::default()
             }),

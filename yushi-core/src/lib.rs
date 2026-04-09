@@ -22,7 +22,6 @@ pub use history::{CompletedTask, DownloadHistory};
 pub use storage::{config_path, history_path, queue_state_path, storage_dir};
 pub use types::{
     BtTaskInfo,
-    TorrentFileInfo,
     ChecksumType,
     // 回调类型
     CompletionCallback,
@@ -44,6 +43,7 @@ pub use types::{
     TaskPriority,
     // 枚举类型
     TaskStatus,
+    TorrentFileInfo,
     VerificationEvent,
 };
 pub use utils::{SpeedCalculator, auto_rename, parse_speed_limit, verify_file};

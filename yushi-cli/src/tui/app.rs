@@ -4,7 +4,7 @@ use crossterm::event::{KeyCode, KeyEvent, KeyModifiers};
 use tokio::sync::mpsc;
 use yushi_core::{
     AppConfig, DownloadHistory, DownloadTask, DownloaderEvent, Priority, ProgressEvent, QueueEvent,
-    TaskEvent, TaskStatus, YuShi, config::AppTheme, parse_speed_limit,
+    TaskEvent, TaskStatus, YuShi, config::AppTheme, parse_speed_limit, types::AddTaskOptions,
 };
 
 // ==================== Enums ====================
@@ -681,15 +681,15 @@ impl App {
 
         match self
             .queue
-            .add_task_with_options(
-                url.clone(),
-                output,
-                state.priority,
-                None,
+            .add_task_with_options(AddTaskOptions {
+                url: url.clone(),
+                dest: output,
+                priority: Some(state.priority),
+                checksum: None,
                 speed_limit,
-                false,
-                None,
-            )
+                auto_rename_on_conflict: false,
+                selected_files: None,
+            })
             .await
         {
             Ok(task_id) => {

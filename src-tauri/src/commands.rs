@@ -1,23 +1,9 @@
 use crate::state::AppState;
-use serde::Deserialize;
 use std::path::PathBuf;
 use tauri::State;
 use yushi_core::{
-    AppConfig, ChecksumType, CompletedTask, DownloadHistory, Task, TaskPriority, TorrentFileInfo,
+    AppConfig, CompletedTask, DownloadHistory, Task, TorrentFileInfo, types::AddTaskOptions,
 };
-
-#[derive(Debug, Deserialize)]
-pub struct AddTaskOptions {
-    pub url: String,
-    pub dest: PathBuf,
-    pub checksum: Option<ChecksumType>,
-    pub priority: Option<TaskPriority>,
-    pub speed_limit: Option<u64>,
-    #[serde(default)]
-    pub auto_rename_on_conflict: bool,
-    /// BT 任务：选择下载的文件索引列表
-    pub selected_files: Option<Vec<usize>>,
-}
 
 #[tauri::command]
 pub async fn get_tasks(state: State<'_, AppState>) -> Result<Vec<Task>, String> {
@@ -31,15 +17,7 @@ pub async fn add_task(
 ) -> Result<String, String> {
     let task_id = state
         .queue
-        .add_task_with_options(
-            options.url,
-            options.dest,
-            options.priority.unwrap_or_default(),
-            options.checksum,
-            options.speed_limit,
-            options.auto_rename_on_conflict,
-            options.selected_files,
-        )
+        .add_task_with_options(options)
         .await
         .map_err(|e| e.to_string())?;
     Ok(task_id)

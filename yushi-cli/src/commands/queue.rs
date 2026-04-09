@@ -8,7 +8,7 @@ use console::style;
 use std::path::PathBuf;
 use yushi_core::{
     ChecksumType, DownloadSource, DownloaderEvent, Priority, ProgressEvent, TaskEvent,
-    VerificationEvent, parse_speed_limit,
+    VerificationEvent, parse_speed_limit, types::AddTaskOptions,
 };
 
 pub async fn execute(args: QueueArgs) -> Result<()> {
@@ -21,7 +21,18 @@ pub async fn execute(args: QueueArgs) -> Result<()> {
             sha256,
             speed_limit,
             select_files,
-        } => add_task(url, output, priority, md5, sha256, speed_limit, select_files).await,
+        } => {
+            add_task(
+                url,
+                output,
+                priority,
+                md5,
+                sha256,
+                speed_limit,
+                select_files,
+            )
+            .await
+        }
         QueueCommands::List => list_tasks().await,
         QueueCommands::Start {
             max_tasks,
@@ -81,15 +92,15 @@ async fn add_task(
     });
 
     let task_id = queue
-        .add_task_with_options(
-            url.clone(),
-            output.clone(),
-            priority,
+        .add_task_with_options(AddTaskOptions {
+            url: url.clone(),
+            dest: output.clone(),
+            priority: Some(priority),
             checksum,
             speed_limit,
-            true,
+            auto_rename_on_conflict: true,
             selected_files,
-        )
+        })
         .await?;
 
     print_success("任务已添加到队列");
@@ -134,7 +145,12 @@ async fn list_tasks() -> Result<()> {
             DownloadSource::Http { .. } => "[HTTP]",
         };
 
-        println!("{} {} {}", style("●").bold(), status_str, style(source_label).dim());
+        println!(
+            "{} {} {}",
+            style("●").bold(),
+            status_str,
+            style(source_label).dim()
+        );
         println!("  ID: {}", style(&task.id[..16]).cyan());
         println!("  URL: {}", task.url);
         println!("  输出: {}", task.dest.display());
