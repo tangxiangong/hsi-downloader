@@ -126,6 +126,81 @@ const SettingsPage: Component = () => {
           </div>
         </div>
 
+        {/* BitTorrent */}
+        <div class="card bg-base-100 border border-base-300">
+          <div class="card-body p-5">
+            <h3 class="text-sm font-semibold mb-3">BitTorrent</h3>
+
+            {/* DHT */}
+            <div class="form-control mb-3">
+              <label class="label cursor-pointer justify-start gap-3">
+                <input
+                  type="checkbox"
+                  class="toggle toggle-sm"
+                  checked={config.bt.dht_enabled}
+                  onChange={(e) => handleSave("bt", { ...config.bt, dht_enabled: e.currentTarget.checked })}
+                />
+                <span class="label-text">{"\u542f\u7528 DHT"}</span>
+              </label>
+            </div>
+
+            {/* Upload Limit */}
+            <div class="form-control mb-3">
+              <label class="label"><span class="label-text text-xs text-base-content/60">{"\u4e0a\u4f20\u9650\u901f (KB/s, \u7559\u7a7a\u4e0d\u9650)"}</span></label>
+              <input
+                type="number"
+                class="input input-bordered input-sm w-full"
+                placeholder={"\u4e0d\u9650\u5236"}
+                value={config.bt.upload_limit ? config.bt.upload_limit / 1024 : ""}
+                onChange={(e) => {
+                  const val = e.currentTarget.value;
+                  handleSave("bt", {
+                    ...config.bt,
+                    upload_limit: val ? parseInt(val) * 1024 : null,
+                  });
+                }}
+              />
+            </div>
+
+            {/* Seed Ratio */}
+            <div class="form-control mb-3">
+              <label class="label"><span class="label-text text-xs text-base-content/60">{"\u505a\u79cd\u6bd4\u4f8b (\u5982 2.0, \u7559\u7a7a\u4e0d\u505a\u79cd)"}</span></label>
+              <input
+                type="number"
+                step="0.1"
+                class="input input-bordered input-sm w-full"
+                placeholder={"\u4e0d\u505a\u79cd"}
+                value={config.bt.seed_ratio ?? ""}
+                onChange={(e) => {
+                  const val = e.currentTarget.value;
+                  handleSave("bt", {
+                    ...config.bt,
+                    seed_ratio: val ? parseFloat(val) : null,
+                  });
+                }}
+              />
+            </div>
+
+            {/* Listen Port */}
+            <div class="form-control mb-3">
+              <label class="label"><span class="label-text text-xs text-base-content/60">{"\u76d1\u542c\u7aef\u53e3 (\u7559\u7a7a\u968f\u673a)"}</span></label>
+              <input
+                type="number"
+                class="input input-bordered input-sm w-full"
+                placeholder={"\u968f\u673a"}
+                value={config.bt.listen_port ?? ""}
+                onChange={(e) => {
+                  const val = e.currentTarget.value;
+                  handleSave("bt", {
+                    ...config.bt,
+                    listen_port: val ? parseInt(val) : null,
+                  });
+                }}
+              />
+            </div>
+          </div>
+        </div>
+
         <div class="card bg-base-100 border border-base-300">
           <div class="card-body p-5">
             <h3 class="text-sm font-semibold mb-3">{"\u5916\u89c2"}</h3>

@@ -13,6 +13,12 @@ const [config, setConfig] = createStore<AppConfig>({
   proxy: null,
   speed_limit: null,
   theme: "system",
+  bt: {
+    dht_enabled: true,
+    upload_limit: null,
+    seed_ratio: null,
+    listen_port: null,
+  },
 });
 
 export async function loadConfig() {
