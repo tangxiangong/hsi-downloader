@@ -4,8 +4,9 @@ use crate::{
     config::BtConfig,
     state::{ChunkState, DownloadState, QueueState, current_timestamp},
     types::{
-        ChecksumType, CompletionCallback, Config, DownloadSource, DownloaderEvent, ProgressEvent,
-        Task, TaskEvent, TaskPriority, TaskStatus, VerificationEvent,
+        BtTaskInfo, ChecksumType, CompletionCallback, Config, DownloadSource, DownloaderEvent,
+        ProgressEvent, Task, TaskEvent, TaskPriority, TaskStatus, TorrentFileInfo,
+        VerificationEvent,
     },
     utils::{
         SpeedCalculator, SpeedLimiter, auto_rename, infer_filename_from_content_disposition,
@@ -886,7 +887,7 @@ impl YuShi {
     /// 返回任务 ID
     pub async fn add_task(&self, url: String, dest: PathBuf) -> Result<String> {
         let speed_limit = self.runtime_config().speed_limit;
-        self.add_task_with_options(url, dest, TaskPriority::Normal, None, speed_limit, false)
+        self.add_task_with_options(url, dest, TaskPriority::Normal, None, speed_limit, false, None)
             .await
     }
 
@@ -909,6 +910,7 @@ impl YuShi {
         checksum: Option<ChecksumType>,
         speed_limit: Option<u64>,
         auto_rename_on_conflict: bool,
+        selected_files: Option<Vec<usize>>,
     ) -> Result<String> {
         let speed_limit = speed_limit.or(self.runtime_config().speed_limit);
 
@@ -939,7 +941,10 @@ impl YuShi {
             checksum,
             speed_limit,
             source,
-            bt_info: None,
+            bt_info: selected_files.map(|files| BtTaskInfo {
+                selected_files: Some(files),
+                ..Default::default()
+            }),
         };
 
         {

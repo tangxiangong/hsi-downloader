@@ -2,7 +2,9 @@ use crate::state::AppState;
 use serde::Deserialize;
 use std::path::PathBuf;
 use tauri::State;
-use yushi_core::{AppConfig, ChecksumType, CompletedTask, DownloadHistory, Task, TaskPriority};
+use yushi_core::{
+    AppConfig, ChecksumType, CompletedTask, DownloadHistory, Task, TaskPriority, TorrentFileInfo,
+};
 
 #[derive(Debug, Deserialize)]
 pub struct AddTaskOptions {
@@ -36,6 +38,7 @@ pub async fn add_task(
             options.checksum,
             options.speed_limit,
             options.auto_rename_on_conflict,
+            options.selected_files,
         )
         .await
         .map_err(|e| e.to_string())?;

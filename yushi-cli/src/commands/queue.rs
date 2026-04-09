@@ -20,7 +20,8 @@ pub async fn execute(args: QueueArgs) -> Result<()> {
             md5,
             sha256,
             speed_limit,
-        } => add_task(url, output, priority, md5, sha256, speed_limit).await,
+            select_files,
+        } => add_task(url, output, priority, md5, sha256, speed_limit, select_files).await,
         QueueCommands::List => list_tasks().await,
         QueueCommands::Start {
             max_tasks,
@@ -41,6 +42,7 @@ async fn add_task(
     md5: Option<String>,
     sha256: Option<String>,
     speed_limit: Option<String>,
+    select_files: Option<String>,
 ) -> Result<()> {
     let config = ConfigStore::load().await?;
     let output = if output.is_absolute() {
@@ -72,6 +74,12 @@ async fn add_task(
         None => None,
     };
 
+    let selected_files = select_files.map(|s| {
+        s.split(',')
+            .filter_map(|idx| idx.trim().parse::<usize>().ok())
+            .collect::<Vec<_>>()
+    });
+
     let task_id = queue
         .add_task_with_options(
             url.clone(),
@@ -80,6 +88,7 @@ async fn add_task(
             checksum,
             speed_limit,
             true,
+            selected_files,
         )
         .await?;
 

@@ -93,6 +93,9 @@ pub enum QueueCommands {
         /// 任务限速 (例如: 1M, 500K)
         #[arg(short = 'l', long)]
         speed_limit: Option<String>,
+        /// 选择下载的文件索引（逗号分隔，用于种子下载）
+        #[arg(long)]
+        select_files: Option<String>,
     },
     /// 列出所有任务
     List,
