@@ -888,9 +888,7 @@ impl YuShi {
 
         let task_id = Uuid::new_v4().to_string();
 
-        let source = DownloadSource::Http {
-            url: url.clone(),
-        };
+        let source = DownloadSource::Http { url: url.clone() };
         let task = Task {
             id: task_id.clone(),
             url,

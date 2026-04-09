@@ -15,6 +15,7 @@ pub mod utils;
 pub use error::*;
 
 // 重新导出公共 API
+pub use bt::{BtEngine, detect_source, spawn_bt_progress_poller};
 pub use config::{AppConfig, BtConfig};
 pub use downloader::YuShi;
 pub use history::{CompletedTask, DownloadHistory};
@@ -24,11 +25,11 @@ pub use types::{
     ChecksumType,
     // 回调类型
     CompletionCallback,
-    DownloadSource,
-
     Config,
     DownloadCallback,
     DownloadConfig,
+    DownloadSource,
+
     // 向后兼容别名
     DownloadTask,
     // 事件类型

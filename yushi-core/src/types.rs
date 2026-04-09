@@ -175,9 +175,7 @@ pub type DownloadCallback = CompletionCallback;
 // ==================== 任务和配置类型 ====================
 
 fn default_http_source() -> DownloadSource {
-    DownloadSource::Http {
-        url: String::new(),
-    }
+    DownloadSource::Http { url: String::new() }
 }
 
 /// 下载任务
