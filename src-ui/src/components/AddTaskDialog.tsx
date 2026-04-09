@@ -1,5 +1,5 @@
 import { type Component, createSignal, Show, For } from "solid-js";
-import { addTask, listTorrentFiles } from "../lib/commands";
+import { addTask, listTorrentFiles, inferDestination } from "../lib/commands";
 import { refreshTasks } from "../stores/task-store";
 import { config } from "../stores/config-store";
 import { open } from "@tauri-apps/plugin-dialog";
@@ -73,9 +73,13 @@ const AddTaskDialog: Component<AddTaskDialogProps> = (props) => {
     setLoading(true);
     setError("");
     try {
+      // HTTP 下载需要推断文件名，BT 下载直接用目录
+      const finalDest = isBtUrl(url())
+        ? dest()
+        : await inferDestination(url(), dest());
       const options: { url: string; dest: string; selected_files?: number[] } = {
         url: url(),
-        dest: dest(),
+        dest: finalDest,
       };
       if (torrentFiles().length > 0) {
         options.selected_files = [...selectedFiles()];
