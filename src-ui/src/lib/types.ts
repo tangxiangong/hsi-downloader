@@ -8,6 +8,25 @@ export type TaskStatus =
 
 export type TaskPriority = "Low" | "Normal" | "High";
 
+export type DownloadSource =
+  | { type: "Http"; url: string }
+  | { type: "BitTorrent"; uri: string };
+
+export interface BtTaskInfo {
+  peers: number;
+  seeders: number;
+  upload_speed: number;
+  uploaded: number;
+  selected_files: number[] | null;
+}
+
+export interface BtConfig {
+  dht_enabled: boolean;
+  upload_limit: number | null;
+  seed_ratio: number | null;
+  listen_port: number | null;
+}
+
 export type AppTheme = "light" | "dark" | "system";
 
 export interface ChecksumType {
@@ -30,6 +49,8 @@ export interface DownloadTask {
   headers: Record<string, string>;
   checksum: ChecksumType | null;
   speed_limit: number | null;
+  source: DownloadSource;
+  bt_info: BtTaskInfo | null;
 }
 
 export interface CompletedTask {
@@ -52,6 +73,7 @@ export interface AppConfig {
   proxy: string | null;
   speed_limit: number | null;
   theme: AppTheme;
+  bt: BtConfig;
 }
 
 export interface AddTaskOptions {
@@ -61,6 +83,7 @@ export interface AddTaskOptions {
   priority?: TaskPriority;
   speed_limit?: number;
   auto_rename_on_conflict?: boolean;
+  selected_files?: number[];
 }
 
 export type DownloaderEvent =
@@ -89,7 +112,16 @@ export type ProgressEvent =
       };
     }
   | { Finished: { task_id: string } }
-  | { Failed: { task_id: string; error: string } };
+  | { Failed: { task_id: string; error: string } }
+  | {
+      BtStatus: {
+        task_id: string;
+        peers: number;
+        seeders: number;
+        upload_speed: number;
+        uploaded: number;
+      };
+    };
 
 export type VerificationEvent =
   | { Started: { task_id: string } }
