@@ -60,6 +60,15 @@ pub async fn remove_task(state: State<'_, AppState>, task_id: String) -> Result<
 }
 
 #[tauri::command]
+pub async fn retry_task(state: State<'_, AppState>, task_id: String) -> Result<(), String> {
+    state
+        .queue
+        .retry_task(&task_id)
+        .await
+        .map_err(|e| e.to_string())
+}
+
+#[tauri::command]
 pub async fn remove_task_with_file(
     state: State<'_, AppState>,
     task_id: String,

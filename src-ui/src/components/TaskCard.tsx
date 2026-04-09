@@ -1,7 +1,7 @@
 import { type Component, Show } from "solid-js";
 import type { DownloadTask } from "../lib/types";
 import { formatBytes, formatSpeed, formatEta, statusLabel, getFileIcon, progressClass } from "../lib/format";
-import { pauseTask, resumeTask, cancelTask, removeTask, removeTaskWithFile } from "../lib/commands";
+import { pauseTask, resumeTask, cancelTask, retryTask, removeTask, removeTaskWithFile } from "../lib/commands";
 import { refreshTasks } from "../stores/task-store";
 
 interface TaskCardProps {
@@ -27,6 +27,10 @@ const TaskCard: Component<TaskCardProps> = (props) => {
   }
   async function handleCancel() {
     await cancelTask(t().id);
+    await refreshTasks();
+  }
+  async function handleRetry() {
+    await retryTask(t().id);
     await refreshTasks();
   }
   async function handleRemove() {
@@ -81,6 +85,9 @@ const TaskCard: Component<TaskCardProps> = (props) => {
             </Show>
             <Show when={t().status === "Downloading" || t().status === "Paused" || t().status === "Pending"}>
               <button class="btn-icon hover:!text-error" onClick={handleCancel} title="\u53d6\u6d88">{"\u2715"}</button>
+            </Show>
+            <Show when={t().status === "Failed"}>
+              <button class="btn-icon hover:!text-success" onClick={handleRetry} title="重试">{"↻"}</button>
             </Show>
             <Show when={t().status === "Completed" || t().status === "Failed" || t().status === "Cancelled"}>
               <button class="btn-icon" onClick={handleRemove} title="\u79fb\u9664">{"\u2715"}</button>

@@ -27,6 +27,10 @@ export async function cancelTask(taskId: string): Promise<void> {
   return invoke("cancel_task", { taskId });
 }
 
+export async function retryTask(taskId: string): Promise<void> {
+  return invoke("retry_task", { taskId });
+}
+
 export async function removeTask(taskId: string): Promise<void> {
   return invoke("remove_task", { taskId });
 }

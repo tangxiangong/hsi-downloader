@@ -1139,8 +1139,8 @@ impl YuShi {
 
                     async {
                         let engine = downloader.ensure_bt_engine().await?;
-                        let output_folder =
-                            task.dest.parent().map(|p| p.to_string_lossy().to_string());
+                        // BT 任务的 dest 是输出目录（不是文件路径）
+                        let output_folder = Some(task.dest.to_string_lossy().to_string());
 
                         let (total_size, _name) = engine
                             .add_torrent(&task_id_owned, &uri, output_folder, selected_files)
@@ -1353,6 +1353,36 @@ impl YuShi {
         if !is_bt {
             self.process_queue().await?;
         }
+        Ok(())
+    }
+
+    /// 重试失败的任务
+    pub async fn retry_task(&self, task_id: &str) -> Result<()> {
+        {
+            let mut tasks = self.tasks.write().await;
+            let task = tasks.get_mut(task_id).ok_or(Error::TaskNotFound)?;
+
+            if task.status != TaskStatus::Failed {
+                return Err(Error::InternalError(
+                    "only failed tasks can be retried".into(),
+                ));
+            }
+
+            task.status = TaskStatus::Pending;
+            task.error = None;
+            task.speed = 0;
+            task.eta = None;
+        }
+
+        self.save_queue_state().await?;
+        let _ = self
+            .queue_event_tx
+            .send(DownloaderEvent::Task(TaskEvent::Resumed {
+                task_id: task_id.to_string(),
+            }))
+            .await;
+
+        self.process_queue().await?;
         Ok(())
     }
 

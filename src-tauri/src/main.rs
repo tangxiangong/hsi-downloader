@@ -51,6 +51,7 @@ fn main() {
             commands::pause_task,
             commands::resume_task,
             commands::cancel_task,
+            commands::retry_task,
             commands::remove_task,
             commands::remove_task_with_file,
             commands::clear_completed,
