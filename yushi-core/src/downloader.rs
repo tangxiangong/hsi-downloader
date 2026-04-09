@@ -2,8 +2,8 @@ use crate::{
     Error, Result,
     state::{ChunkState, DownloadState, QueueState, current_timestamp},
     types::{
-        ChecksumType, CompletionCallback, Config, DownloaderEvent, ProgressEvent, Task, TaskEvent,
-        TaskPriority, TaskStatus, VerificationEvent,
+        ChecksumType, CompletionCallback, Config, DownloadSource, DownloaderEvent, ProgressEvent,
+        Task, TaskEvent, TaskPriority, TaskStatus, VerificationEvent,
     },
     utils::{
         SpeedCalculator, SpeedLimiter, auto_rename, infer_filename_from_content_disposition,
@@ -888,6 +888,9 @@ impl YuShi {
 
         let task_id = Uuid::new_v4().to_string();
 
+        let source = DownloadSource::Http {
+            url: url.clone(),
+        };
         let task = Task {
             id: task_id.clone(),
             url,
@@ -906,6 +909,8 @@ impl YuShi {
             headers: HashMap::new(),
             checksum,
             speed_limit,
+            source,
+            bt_info: None,
         };
 
         {
@@ -1081,6 +1086,7 @@ impl YuShi {
                         ProgressEvent::Updated { .. } => {}
                         ProgressEvent::ChunkProgress { .. } => {}
                         ProgressEvent::StreamProgress { .. } => {}
+                        ProgressEvent::BtStatus { .. } => {}
                     }
                 }
             });
