@@ -3,8 +3,32 @@ use crate::{storage, utils::parse_speed_limit};
 use serde::{Deserialize, Serialize};
 use std::path::{Path, PathBuf};
 
+/// BitTorrent 相关配置
+#[derive(Debug, Clone, Serialize, Deserialize, PartialEq)]
+pub struct BtConfig {
+    /// 是否启用 DHT（默认 true）
+    pub dht_enabled: bool,
+    /// 上传限速（字节/秒），None 表示不限制
+    pub upload_limit: Option<u64>,
+    /// 做种目标比例（如 2.0），达到后停止做种
+    pub seed_ratio: Option<f64>,
+    /// BT 监听端口，None 表示随机
+    pub listen_port: Option<u16>,
+}
+
+impl Default for BtConfig {
+    fn default() -> Self {
+        Self {
+            dht_enabled: true,
+            upload_limit: None,
+            seed_ratio: None,
+            listen_port: None,
+        }
+    }
+}
+
 /// Shared application configuration persisted for CLI, TUI, and GUI.
-#[derive(Debug, Clone, Serialize, Deserialize, PartialEq, Eq)]
+#[derive(Debug, Clone, Serialize, Deserialize, PartialEq)]
 pub struct AppConfig {
     /// 默认下载路径
     pub default_download_path: PathBuf,
@@ -26,6 +50,9 @@ pub struct AppConfig {
     pub speed_limit: Option<u64>,
     /// 主题设置 (light, dark, system)
     pub theme: AppTheme,
+    /// BitTorrent 相关配置
+    #[serde(default)]
+    pub bt: BtConfig,
 }
 
 #[derive(Debug, Clone, Copy, Serialize, Deserialize, PartialEq, Eq, Default)]
@@ -79,6 +106,7 @@ impl Default for AppConfig {
             proxy: None,
             speed_limit: None,
             theme: AppTheme::default(),
+            bt: BtConfig::default(),
         }
     }
 }
@@ -190,7 +218,7 @@ impl From<LegacyCliConfig> for AppConfig {
 
 #[cfg(test)]
 mod tests {
-    use super::{AppConfig, AppTheme};
+    use super::{AppConfig, AppTheme, BtConfig};
     use std::{
         path::PathBuf,
         time::{SystemTime, UNIX_EPOCH},
@@ -231,5 +259,27 @@ mod tests {
 
         assert_eq!(loaded, config);
         let _ = fs_err::tokio::remove_file(path).await;
+    }
+
+    #[test]
+    fn bt_config_default() {
+        let config = BtConfig::default();
+        assert!(config.dht_enabled);
+        assert!(config.upload_limit.is_none());
+        assert!(config.seed_ratio.is_none());
+        assert!(config.listen_port.is_none());
+    }
+
+    #[test]
+    fn bt_config_serde_roundtrip() {
+        let config = BtConfig {
+            dht_enabled: false,
+            upload_limit: Some(1024 * 1024),
+            seed_ratio: Some(2.0),
+            listen_port: Some(6881),
+        };
+        let json = serde_json::to_string(&config).unwrap();
+        let deserialized: BtConfig = serde_json::from_str(&json).unwrap();
+        assert_eq!(config, deserialized);
     }
 }
