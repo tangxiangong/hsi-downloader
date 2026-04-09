@@ -13,6 +13,8 @@ pub struct AddTaskOptions {
     pub speed_limit: Option<u64>,
     #[serde(default)]
     pub auto_rename_on_conflict: bool,
+    /// BT 任务：选择下载的文件索引列表
+    pub selected_files: Option<Vec<usize>>,
 }
 
 #[tauri::command]

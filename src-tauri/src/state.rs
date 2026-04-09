@@ -28,6 +28,7 @@ impl AppState {
             config.downloader_config(),
             config.max_concurrent_tasks,
             q_path,
+            config.bt.clone(),
         );
 
         // Install history tracking callback

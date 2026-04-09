@@ -42,7 +42,8 @@ pub async fn execute(args: DownloadArgs) -> Result<()> {
     let temp_dir = std::env::temp_dir();
     let queue_state_path = temp_dir.join(format!("yushi_temp_{}.json", std::process::id()));
 
-    let (downloader, _) = YuShi::with_config(config, 1, queue_state_path.clone());
+    let (downloader, _) =
+        YuShi::with_config(config, 1, queue_state_path.clone(), Default::default());
     let output = if let Some(path) = args.output {
         if path.is_absolute() {
             path

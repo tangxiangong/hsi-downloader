@@ -54,6 +54,7 @@ impl ConfigStore {
             downloader_config,
             max_tasks.unwrap_or(config.max_concurrent_tasks),
             queue_path,
+            config.bt.clone(),
         );
 
         install_history_tracking(&mut queue.0);

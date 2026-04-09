@@ -189,7 +189,12 @@ impl YuShi {
             max_concurrent: max_concurrent_downloads,
             ..Default::default()
         };
-        Self::with_config(config, max_concurrent_tasks, queue_state_path, BtConfig::default())
+        Self::with_config(
+            config,
+            max_concurrent_tasks,
+            queue_state_path,
+            BtConfig::default(),
+        )
     }
 
     /// 使用自定义配置创建下载器
