@@ -10,6 +10,7 @@ dirs = { workspace = true }
 fs-err = { workspace = true }
 futures = { workspace = true }
 hex = { workspace = true }
+librqbit = { workspace = true }
 md-5 = { workspace = true }
 reqwest = { workspace = true }
 serde = { workspace = true, features = ["derive"] }
