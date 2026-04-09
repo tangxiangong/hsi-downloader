@@ -86,6 +86,12 @@ export interface AddTaskOptions {
   selected_files?: number[];
 }
 
+export interface TorrentFileInfo {
+  index: number;
+  name: string;
+  size: number;
+}
+
 export type DownloaderEvent =
   | { type: "Task"; data: TaskEvent }
   | { type: "Progress"; data: ProgressEvent }

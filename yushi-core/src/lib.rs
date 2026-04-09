@@ -22,6 +22,7 @@ pub use history::{CompletedTask, DownloadHistory};
 pub use storage::{config_path, history_path, queue_state_path, storage_dir};
 pub use types::{
     BtTaskInfo,
+    TorrentFileInfo,
     ChecksumType,
     // 回调类型
     CompletionCallback,

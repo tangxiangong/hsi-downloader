@@ -3,7 +3,7 @@
 //! 基于 librqbit 实现 BT 下载功能。
 
 use crate::config::BtConfig;
-use crate::types::{BtTaskInfo, DownloadSource, DownloaderEvent, ProgressEvent};
+use crate::types::{BtTaskInfo, DownloadSource, DownloaderEvent, ProgressEvent, TorrentFileInfo};
 use crate::{Error, Result};
 use librqbit::{
     AddTorrent, AddTorrentOptions, AddTorrentResponse, ManagedTorrent, Session, SessionOptions,
@@ -234,6 +234,52 @@ impl BtEngine {
     /// 移除 handle（完成后清理）
     pub async fn remove_handle(&self, task_id: &str) {
         self.handles.write().await.remove(task_id);
+    }
+
+    /// 列出种子中的文件信息（用于选择性下载）
+    pub async fn list_torrent_files(&self, uri: &str) -> Result<Vec<TorrentFileInfo>> {
+        let add = if uri.starts_with("magnet:")
+            || uri.starts_with("http://")
+            || uri.starts_with("https://")
+        {
+            AddTorrent::from_url(uri)
+        } else {
+            let bytes = fs_err::tokio::read(uri).await?;
+            AddTorrent::TorrentFileBytes(bytes.into())
+        };
+
+        let opts = AddTorrentOptions {
+            list_only: true,
+            ..Default::default()
+        };
+
+        let response = self
+            .session
+            .add_torrent(add, Some(opts))
+            .await
+            .map_err(|e| Error::BtError(format!("failed to list torrent files: {e}")))?;
+
+        match response {
+            AddTorrentResponse::ListOnly(list) => {
+                let files = list
+                    .info
+                    .iter_file_details()
+                    .map_err(|e| Error::BtError(format!("failed to iterate file details: {e}")))?
+                    .enumerate()
+                    .map(|(i, details)| TorrentFileInfo {
+                        index: i,
+                        name: details
+                            .filename
+                            .to_pathbuf()
+                            .map(|p| p.to_string_lossy().to_string())
+                            .unwrap_or_default(),
+                        size: details.len,
+                    })
+                    .collect();
+                Ok(files)
+            }
+            _ => Err(Error::BtError("expected list-only response".into())),
+        }
     }
 }
 

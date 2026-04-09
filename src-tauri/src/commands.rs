@@ -163,6 +163,18 @@ pub async fn update_config(state: State<'_, AppState>, config: AppConfig) -> Res
 }
 
 #[tauri::command]
+pub async fn list_torrent_files(
+    state: State<'_, AppState>,
+    uri: String,
+) -> Result<Vec<TorrentFileInfo>, String> {
+    state
+        .queue
+        .list_torrent_files(&uri)
+        .await
+        .map_err(|e| e.to_string())
+}
+
+#[tauri::command]
 pub async fn infer_destination(
     state: State<'_, AppState>,
     url: String,

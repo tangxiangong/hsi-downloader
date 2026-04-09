@@ -60,6 +60,7 @@ fn main() {
             commands::clear_history,
             commands::get_config,
             commands::update_config,
+            commands::list_torrent_files,
             commands::infer_destination,
         ])
         .run(tauri::generate_context!())

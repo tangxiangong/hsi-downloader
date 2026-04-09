@@ -4,6 +4,7 @@ import type {
   AppConfig,
   CompletedTask,
   DownloadTask,
+  TorrentFileInfo,
 } from "./types";
 
 export async function getTasks(): Promise<DownloadTask[]> {
@@ -60,6 +61,12 @@ export async function getConfig(): Promise<AppConfig> {
 
 export async function updateConfig(config: AppConfig): Promise<void> {
   return invoke("update_config", { config });
+}
+
+export async function listTorrentFiles(
+  uri: string,
+): Promise<TorrentFileInfo[]> {
+  return invoke("list_torrent_files", { uri });
 }
 
 export async function inferDestination(

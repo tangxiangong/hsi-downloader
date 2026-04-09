@@ -77,6 +77,17 @@ pub struct BtTaskInfo {
     pub selected_files: Option<Vec<usize>>,
 }
 
+/// 种子文件信息（用于文件选择性下载）
+#[derive(Debug, Clone, Serialize, Deserialize)]
+pub struct TorrentFileInfo {
+    /// 文件索引
+    pub index: usize,
+    /// 文件名（相对路径）
+    pub name: String,
+    /// 文件大小（字节）
+    pub size: u64,
+}
+
 // ==================== 事件类型 ====================
 
 /// 下载器事件（统一的事件类型）

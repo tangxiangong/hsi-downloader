@@ -966,6 +966,12 @@ impl YuShi {
         Ok(task_id)
     }
 
+    /// 列出种子中的文件信息（用于选择性下载）
+    pub async fn list_torrent_files(&self, uri: &str) -> Result<Vec<TorrentFileInfo>> {
+        let engine = self.ensure_bt_engine().await?;
+        engine.list_torrent_files(uri).await
+    }
+
     /// 处理队列，启动待处理的任务（按优先级排序）
     async fn process_queue(&self) -> Result<()> {
         let active_count = self.active_downloads.read().await.len();
