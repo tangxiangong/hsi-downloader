@@ -135,12 +135,23 @@ pub fn draw(f: &mut Frame, task: &DownloadTask, selected: bool, theme: &ThemeCol
                 format_size(task.downloaded),
                 format_size(task.total_size)
             );
-            let speed_str = format!(" · {}/s", format_size(task.speed));
             let eta_str = task
                 .eta
                 .map(|e| format!(" · 剩余 {}", format_eta(e)))
                 .unwrap_or_default();
-            format!("{}{}{}", size_str, speed_str, eta_str)
+            if let Some(bt) = &task.bt_info {
+                format!(
+                    "{} · ↓{}/s · ↑{}/s · {}P{}",
+                    size_str,
+                    format_size(task.speed),
+                    format_size(bt.upload_speed),
+                    bt.peers,
+                    eta_str
+                )
+            } else {
+                let speed_str = format!(" · {}/s", format_size(task.speed));
+                format!("{}{}{}", size_str, speed_str, eta_str)
+            }
         }
         TaskStatus::Paused => {
             format!(
