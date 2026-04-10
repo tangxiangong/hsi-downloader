@@ -17,8 +17,7 @@ use crate::{
 use fs_err::tokio as fs;
 use futures::StreamExt;
 use reqwest::{
-    Client, Proxy,
-    StatusCode,
+    Client, Proxy, StatusCode,
     header::{CONTENT_DISPOSITION, CONTENT_LENGTH, CONTENT_RANGE, RANGE, USER_AGENT},
 };
 use std::{
@@ -64,8 +63,14 @@ const MAX_RETRY_BACKOFF: Duration = Duration::from_secs(30);
 
 #[derive(Debug, Clone, Copy, PartialEq, Eq)]
 enum DownloadPlan {
-    Chunked { total_size: u64, resumed_bytes: u64 },
-    Streaming { total_size: Option<u64>, resumed_bytes: u64 },
+    Chunked {
+        total_size: u64,
+        resumed_bytes: u64,
+    },
+    Streaming {
+        total_size: Option<u64>,
+        resumed_bytes: u64,
+    },
 }
 
 #[derive(Debug, Clone, Copy)]
@@ -1710,7 +1715,10 @@ fn is_valid_chunk_response(
 mod tests {
     use super::*;
     use reqwest::StatusCode;
-    use std::{collections::HashMap, time::{SystemTime, UNIX_EPOCH}};
+    use std::{
+        collections::HashMap,
+        time::{SystemTime, UNIX_EPOCH},
+    };
 
     #[test]
     fn retry_delay_uses_exponential_backoff_with_cap() {
@@ -1802,7 +1810,12 @@ mod tests {
         };
         state.save(&queue_path).await.expect("save queue state");
 
-        let (downloader, _) = Hsi::with_config(Config::default(), 1, queue_path.clone(), BtConfig::default());
+        let (downloader, _) = Hsi::with_config(
+            Config::default(),
+            1,
+            queue_path.clone(),
+            BtConfig::default(),
+        );
         downloader
             .load_queue_from_state()
             .await
@@ -1822,12 +1835,7 @@ mod tests {
 
     #[test]
     fn chunked_download_rejects_responses_without_partial_content_metadata() {
-        assert!(!is_valid_chunk_response(
-            StatusCode::OK,
-            None,
-            0,
-            3
-        ));
+        assert!(!is_valid_chunk_response(StatusCode::OK, None, 0, 3));
         assert!(!is_valid_chunk_response(
             StatusCode::PARTIAL_CONTENT,
             Some("bytes 0-7/8"),
@@ -1866,8 +1874,12 @@ mod tests {
     #[tokio::test]
     async fn completion_callback_finishes_before_completed_event_is_emitted() {
         let queue_path = temp_file("completion-order-queue");
-        let (mut downloader, mut event_rx) =
-            Hsi::with_config(Config::default(), 1, queue_path.clone(), BtConfig::default());
+        let (mut downloader, mut event_rx) = Hsi::with_config(
+            Config::default(),
+            1,
+            queue_path.clone(),
+            BtConfig::default(),
+        );
         let (callback_tx, mut callback_rx) = mpsc::channel(1);
         let dest = temp_file("completion-order-output");
 
@@ -1919,7 +1931,9 @@ mod tests {
 
         assert_eq!(completed_id, task_id);
         assert_eq!(
-            callback_rx.try_recv().expect("callback should have completed before event"),
+            callback_rx
+                .try_recv()
+                .expect("callback should have completed before event"),
             completed_id
         );
 
@@ -1940,8 +1954,12 @@ mod tests {
             .await
             .expect("create bt output directory");
         let queue_path = temp_file("bt-remove-queue");
-        let (downloader, _) =
-            Hsi::with_config(Config::default(), 1, queue_path.clone(), BtConfig::default());
+        let (downloader, _) = Hsi::with_config(
+            Config::default(),
+            1,
+            queue_path.clone(),
+            BtConfig::default(),
+        );
         let task_id = "bt-task".to_string();
 
         downloader.tasks.write().await.insert(
@@ -1974,7 +1992,10 @@ mod tests {
             .await
             .expect("remove bt task with directory output");
 
-        assert!(!output_dir.exists(), "BT output directory should be removed");
+        assert!(
+            !output_dir.exists(),
+            "BT output directory should be removed"
+        );
         assert!(downloader.get_task(&task_id).await.is_none());
 
         let _ = fs::remove_file(&queue_path).await;

@@ -109,8 +109,12 @@ mod tests {
             .await
             .expect("append history entry");
 
-        let (queue, _event_rx) =
-            Hsi::with_config(Config::default(), 1, queue_path.clone(), BtConfig::default());
+        let (queue, _event_rx) = Hsi::with_config(
+            Config::default(),
+            1,
+            queue_path.clone(),
+            BtConfig::default(),
+        );
         let state = AppState {
             queue,
             config: RwLock::new(AppConfig::default()),
