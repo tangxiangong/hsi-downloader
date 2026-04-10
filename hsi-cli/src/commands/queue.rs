@@ -227,6 +227,8 @@ async fn start_queue(max_tasks: Option<usize>, connections: Option<usize>) -> Re
     ));
     println!();
 
+    queue.start_pending_tasks().await?;
+
     let progress_mgr = ProgressManager::new();
     let event_handle = tokio::spawn(async move {
         while let Some(event) = event_rx.recv().await {

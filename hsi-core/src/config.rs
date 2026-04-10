@@ -127,9 +127,9 @@ impl AppConfig {
 
     pub async fn save(&self, path: &Path) -> Result<()> {
         self.validate()?;
-        storage::ensure_parent_dir(path).await?;
+        let _lock = storage::acquire_file_lock(path).await?;
         let content = serde_json::to_string_pretty(self)?;
-        fs_err::tokio::write(path, content).await?;
+        storage::atomic_write_string(path, &content).await?;
         Ok(())
     }
 
@@ -221,7 +221,7 @@ mod tests {
     use super::{AppConfig, AppTheme, BtConfig};
     use std::{
         path::PathBuf,
-        time::{SystemTime, UNIX_EPOCH},
+        time::{Duration, SystemTime, UNIX_EPOCH},
     };
 
     fn temp_file(name: &str) -> PathBuf {
@@ -257,6 +257,37 @@ mod tests {
         config.save(&path).await.expect("save config");
         let loaded = AppConfig::load(&path).await.expect("load config");
 
+        assert_eq!(loaded, config);
+        let _ = fs_err::tokio::remove_file(path).await;
+    }
+
+    #[tokio::test]
+    async fn save_waits_for_existing_file_lock() {
+        let path = temp_file("config-lock");
+        let config = AppConfig::default();
+        let lock = crate::storage::acquire_file_lock(&path)
+            .await
+            .expect("acquire lock");
+        let path_for_save = path.clone();
+        let config_for_save = config.clone();
+
+        let save_task = tokio::spawn(async move {
+            config_for_save
+                .save(&path_for_save)
+                .await
+                .expect("save config");
+        });
+
+        tokio::time::sleep(Duration::from_millis(75)).await;
+        assert!(
+            !save_task.is_finished(),
+            "config save should wait until the lock is released"
+        );
+
+        drop(lock);
+        save_task.await.expect("join save task");
+
+        let loaded = AppConfig::load(&path).await.expect("load config");
         assert_eq!(loaded, config);
         let _ = fs_err::tokio::remove_file(path).await;
     }

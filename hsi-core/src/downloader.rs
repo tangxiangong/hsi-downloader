@@ -18,7 +18,8 @@ use fs_err::tokio as fs;
 use futures::StreamExt;
 use reqwest::{
     Client, Proxy,
-    header::{CONTENT_DISPOSITION, CONTENT_LENGTH, RANGE, USER_AGENT},
+    StatusCode,
+    header::{CONTENT_DISPOSITION, CONTENT_LENGTH, CONTENT_RANGE, RANGE, USER_AGENT},
 };
 use std::{
     collections::HashMap,
@@ -60,6 +61,12 @@ const STATE_SAVE_BYTES_THRESHOLD: u64 = 512 * 1024;
 const QUEUE_STATE_SAVE_DEBOUNCE: Duration = Duration::from_millis(150);
 const MAX_RETRIES: u32 = 5;
 const MAX_RETRY_BACKOFF: Duration = Duration::from_secs(30);
+
+#[derive(Debug, Clone, Copy, PartialEq, Eq)]
+enum DownloadPlan {
+    Chunked { total_size: u64, resumed_bytes: u64 },
+    Streaming { total_size: Option<u64>, resumed_bytes: u64 },
+}
 
 #[derive(Debug, Clone, Copy)]
 enum QueueStateSaveSignal {
@@ -171,6 +178,56 @@ impl Hsi {
             &self.queue_state_write_lock,
         )
         .await
+    }
+
+    async fn finalize_task(
+        &self,
+        task_id: String,
+        verify_result: Result<()>,
+        on_complete: Option<CompletionCallback>,
+    ) {
+        let callback_result = match &verify_result {
+            Ok(_) => Ok(()),
+            Err(error) => Err(error.to_string()),
+        };
+
+        let completion_event = {
+            let mut tasks = self.tasks.write().await;
+            let Some(task) = tasks.get_mut(&task_id) else {
+                return;
+            };
+
+            match &verify_result {
+                Ok(_) => {
+                    task.status = TaskStatus::Completed;
+                    task.error = None;
+                    task.speed = 0;
+                    task.eta = Some(0);
+                    DownloaderEvent::Task(TaskEvent::Completed {
+                        task_id: task_id.clone(),
+                    })
+                }
+                Err(error) => {
+                    let error_message = error.to_string();
+                    task.status = TaskStatus::Failed;
+                    task.error = Some(error_message.clone());
+                    task.speed = 0;
+                    task.eta = None;
+                    DownloaderEvent::Task(TaskEvent::Failed {
+                        task_id: task_id.clone(),
+                        error: error_message,
+                    })
+                }
+            }
+        };
+
+        let _ = self.write_queue_state_snapshot().await;
+
+        if let Some(callback) = on_complete {
+            callback(task_id.clone(), callback_result).await;
+        }
+
+        let _ = self.queue_event_tx.send(completion_event).await;
     }
 
     /// 创建新的下载器实例
@@ -469,10 +526,10 @@ impl Hsi {
     ) -> Result<()> {
         let client = self.http_client();
         let config = self.runtime_config();
-        let resume_from = {
-            let state = state.read().await;
-            state.downloaded
-        };
+        {
+            let mut state = state.write().await;
+            state.downloaded = 0;
+        }
         let mut request = client.get(url);
 
         // 添加自定义头
@@ -490,15 +547,9 @@ impl Hsi {
             return Err(Error::HttpError(response.status().to_string()));
         }
 
-        let mut file = if resume_from > 0 {
-            let mut options = fs::OpenOptions::new();
-            options.create(true).append(true);
-            options.open(dest).await?
-        } else {
-            fs::File::create(dest).await?
-        };
+        let mut file = fs::File::create(dest).await?;
         let mut stream = response.bytes_stream();
-        let mut downloaded = resume_from;
+        let mut downloaded = 0u64;
         let mut unsaved_bytes = 0u64;
         let mut last_state_save = Instant::now();
         let speed_limiter =
@@ -653,55 +704,100 @@ impl Hsi {
 
             match res {
                 Ok(resp) if resp.status().is_success() => {
-                    let mut file = fs::OpenOptions::new().write(true).open(&dest).await?;
-                    file.seek(SeekFrom::Start(start_pos)).await?;
-
-                    let mut stream = resp.bytes_stream();
-                    let mut current_idx = start_pos;
-                    let mut unsaved_bytes = 0u64;
-                    let mut last_state_save = Instant::now();
-
-                    while let Some(item) = stream.next().await {
-                        let chunk_data = item.map_err(|e| Error::StreamError(e.to_string()))?;
-                        file.write_all(&chunk_data).await?;
-
-                        let len = chunk_data.len() as u64;
-                        current_idx += len;
-
-                        if let Some(speed_limiter) = &speed_limiter {
-                            speed_limiter.write().await.wait(len).await;
+                    let download_result: Result<()> = async {
+                        if !is_valid_chunk_response(
+                            resp.status(),
+                            resp.headers()
+                                .get(CONTENT_RANGE)
+                                .and_then(|value| value.to_str().ok()),
+                            start_pos,
+                            end_pos,
+                        ) {
+                            return Err(Error::HttpError(format!(
+                                "Chunk {} received invalid partial response: status={} range={:?}",
+                                index,
+                                resp.status(),
+                                resp.headers().get(CONTENT_RANGE)
+                            )));
                         }
 
-                        // 更新内存状态
+                        let mut file = fs::OpenOptions::new().write(true).open(&dest).await?;
+                        file.seek(SeekFrom::Start(start_pos)).await?;
+
+                        let mut stream = resp.bytes_stream();
+                        let mut current_idx = start_pos;
+                        let mut unsaved_bytes = 0u64;
+                        let mut last_state_save = Instant::now();
+
+                        while let Some(item) = stream.next().await {
+                            let chunk_data = item.map_err(|e| Error::StreamError(e.to_string()))?;
+                            let next_idx = current_idx.saturating_add(chunk_data.len() as u64);
+                            if next_idx > end_pos.saturating_add(1) {
+                                return Err(Error::HttpError(format!(
+                                    "Chunk {} exceeded requested range {}-{}",
+                                    index, start_pos, end_pos
+                                )));
+                            }
+                            file.write_all(&chunk_data).await?;
+
+                            let len = chunk_data.len() as u64;
+                            current_idx = next_idx;
+
+                            if let Some(speed_limiter) = &speed_limiter {
+                                speed_limiter.write().await.wait(len).await;
+                            }
+
+                            {
+                                let mut s = state_lock.write().await;
+                                s.chunks[index].current = current_idx;
+                            }
+
+                            let _ = tx
+                                .send(ProgressEvent::ChunkDownloading {
+                                    chunk_index: index,
+                                    delta: len,
+                                })
+                                .await;
+
+                            unsaved_bytes += len;
+                            if unsaved_bytes >= STATE_SAVE_BYTES_THRESHOLD
+                                || last_state_save.elapsed() >= STATE_SAVE_INTERVAL
+                            {
+                                Self::sync_chunk_state(&mut file, &state_lock, state_file).await?;
+                                unsaved_bytes = 0;
+                                last_state_save = Instant::now();
+                            }
+                        }
+
+                        if current_idx != end_pos.saturating_add(1) {
+                            return Err(Error::HttpError(format!(
+                                "Chunk {} ended early: expected {} bytes, got {}",
+                                index,
+                                end_pos.saturating_sub(start_pos).saturating_add(1),
+                                current_idx.saturating_sub(start_pos)
+                            )));
+                        }
+
                         {
                             let mut s = state_lock.write().await;
                             s.chunks[index].current = current_idx;
+                            s.chunks[index].is_finished = true;
                         }
+                        Self::sync_chunk_state(&mut file, &state_lock, state_file).await?;
+                        Ok(())
+                    }
+                    .await;
 
-                        let _ = tx
-                            .send(ProgressEvent::ChunkDownloading {
-                                chunk_index: index,
-                                delta: len,
-                            })
-                            .await;
-
-                        unsaved_bytes += len;
-                        if unsaved_bytes >= STATE_SAVE_BYTES_THRESHOLD
-                            || last_state_save.elapsed() >= STATE_SAVE_INTERVAL
-                        {
-                            Self::sync_chunk_state(&mut file, &state_lock, state_file).await?;
-                            unsaved_bytes = 0;
-                            last_state_save = Instant::now();
+                    match download_result {
+                        Ok(()) => return Ok(()),
+                        Err(err) => {
+                            retry_count += 1;
+                            if retry_count > MAX_RETRIES {
+                                return Err(err);
+                            }
+                            tokio::time::sleep(retry_delay(retry_count)).await;
                         }
                     }
-
-                    {
-                        let mut s = state_lock.write().await;
-                        s.chunks[index].current = current_idx;
-                        s.chunks[index].is_finished = true;
-                    }
-                    Self::sync_chunk_state(&mut file, &state_lock, state_file).await?;
-                    return Ok(());
                 }
                 Ok(resp) => {
                     retry_count += 1;
@@ -842,21 +938,26 @@ impl Hsi {
                 let existing_downloaded =
                     Self::existing_downloaded_bytes(dest, state.downloaded).await?;
                 let (total_size, supports_range) = self.probe_download_capability(url).await?;
-
-                if supports_range && let Some(total_size) = total_size {
-                    return self
-                        .build_chunked_state(url, dest, state_path, total_size, existing_downloaded)
-                        .await;
-                }
-
-                return self
-                    .build_streaming_state(
-                        url,
-                        state_path,
-                        total_size.or(state.total_size),
-                        existing_downloaded,
-                    )
-                    .await;
+                return match choose_download_plan(
+                    total_size.or(state.total_size),
+                    supports_range,
+                    existing_downloaded,
+                ) {
+                    DownloadPlan::Chunked {
+                        total_size,
+                        resumed_bytes,
+                    } => {
+                        self.build_chunked_state(url, dest, state_path, total_size, resumed_bytes)
+                            .await
+                    }
+                    DownloadPlan::Streaming {
+                        total_size,
+                        resumed_bytes,
+                    } => {
+                        self.build_streaming_state(url, state_path, total_size, resumed_bytes)
+                            .await
+                    }
+                };
             }
 
             return Ok(state);
@@ -864,15 +965,22 @@ impl Hsi {
 
         let existing_downloaded = Self::existing_downloaded_bytes(dest, 0).await?;
         let (total_size_opt, supports_range) = self.probe_download_capability(url).await?;
-
-        if supports_range && let Some(total_size) = total_size_opt {
-            return self
-                .build_chunked_state(url, dest, state_path, total_size, existing_downloaded)
-                .await;
+        match choose_download_plan(total_size_opt, supports_range, existing_downloaded) {
+            DownloadPlan::Chunked {
+                total_size,
+                resumed_bytes,
+            } => {
+                self.build_chunked_state(url, dest, state_path, total_size, resumed_bytes)
+                    .await
+            }
+            DownloadPlan::Streaming {
+                total_size,
+                resumed_bytes,
+            } => {
+                self.build_streaming_state(url, state_path, total_size, resumed_bytes)
+                    .await
+            }
         }
-
-        self.build_streaming_state(url, state_path, total_size_opt, existing_downloaded)
-            .await
     }
 
     // ==================== 队列管理方法 ====================
@@ -881,7 +989,8 @@ impl Hsi {
     pub async fn load_queue_from_state(&self) -> Result<()> {
         if let Some(state) = QueueState::load(&self.queue_state_path).await? {
             let mut tasks = self.tasks.write().await;
-            for task in state.tasks {
+            for mut task in state.tasks {
+                normalize_loaded_task(&mut task);
                 tasks.insert(task.id.clone(), task);
             }
         }
@@ -898,6 +1007,10 @@ impl Hsi {
 
     pub async fn persist_queue_state(&self) -> Result<()> {
         self.write_queue_state_snapshot().await
+    }
+
+    pub async fn start_pending_tasks(&self) -> Result<()> {
+        self.process_queue().await
     }
 
     /// 添加下载任务到队列
@@ -1281,45 +1394,9 @@ impl Hsi {
                 result
             };
 
-            // 更新任务状态并调用回调
-            let callback_result = match &verify_result {
-                Ok(_) => Ok(()),
-                Err(e) => Err(e.to_string()),
-            };
-
-            let completion_event = {
-                let mut tasks = tasks.write().await;
-                let Some(task) = tasks.get_mut(&task_id_owned) else {
-                    return;
-                };
-
-                match &verify_result {
-                    Ok(_) => {
-                        task.status = TaskStatus::Completed;
-                        task.error = None;
-                        DownloaderEvent::Task(TaskEvent::Completed {
-                            task_id: task_id_owned.clone(),
-                        })
-                    }
-                    Err(error) => {
-                        let error_message = error.to_string();
-                        task.status = TaskStatus::Failed;
-                        task.error = Some(error_message.clone());
-                        DownloaderEvent::Task(TaskEvent::Failed {
-                            task_id: task_id_owned.clone(),
-                            error: error_message,
-                        })
-                    }
-                }
-            };
-
-            let _ = queue_event_tx.send(completion_event).await;
-            let _ = downloader.write_queue_state_snapshot().await;
-
-            // 调用完成回调
-            if let Some(callback) = on_complete {
-                callback(task_id_owned.clone(), callback_result).await;
-            }
+            downloader
+                .finalize_task(task_id_owned.clone(), verify_result, on_complete)
+                .await;
 
             // 从活动下载中移除
             active_downloads.write().await.remove(&task_id_owned);
@@ -1561,8 +1638,17 @@ impl Hsi {
 }
 
 async fn remove_file_if_exists(path: &Path) -> Result<()> {
-    match fs::remove_file(path).await {
-        Ok(()) => Ok(()),
+    match fs::metadata(path).await {
+        Ok(metadata) if metadata.is_dir() => match fs::remove_dir_all(path).await {
+            Ok(()) => Ok(()),
+            Err(err) if err.kind() == ErrorKind::NotFound => Ok(()),
+            Err(err) => Err(err.into()),
+        },
+        Ok(_) => match fs::remove_file(path).await {
+            Ok(()) => Ok(()),
+            Err(err) if err.kind() == ErrorKind::NotFound => Ok(()),
+            Err(err) => Err(err.into()),
+        },
         Err(err) if err.kind() == ErrorKind::NotFound => Ok(()),
         Err(err) => Err(err.into()),
     }
@@ -1573,10 +1659,58 @@ fn retry_delay(retry_count: u32) -> Duration {
     Duration::from_secs(seconds).min(MAX_RETRY_BACKOFF)
 }
 
+fn normalize_loaded_task(task: &mut Task) {
+    if matches!(task.status, TaskStatus::Downloading) {
+        task.status = TaskStatus::Pending;
+        task.error = None;
+    }
+
+    if matches!(task.status, TaskStatus::Pending | TaskStatus::Paused) {
+        task.speed = 0;
+        task.eta = None;
+    }
+}
+
+fn choose_download_plan(
+    total_size: Option<u64>,
+    supports_range: bool,
+    existing_downloaded: u64,
+) -> DownloadPlan {
+    if supports_range && let Some(total_size) = total_size {
+        return DownloadPlan::Chunked {
+            total_size,
+            resumed_bytes: existing_downloaded.min(total_size),
+        };
+    }
+
+    DownloadPlan::Streaming {
+        total_size,
+        resumed_bytes: 0,
+    }
+}
+
+fn is_valid_chunk_response(
+    status: StatusCode,
+    content_range: Option<&str>,
+    start_pos: u64,
+    end_pos: u64,
+) -> bool {
+    if status != StatusCode::PARTIAL_CONTENT {
+        return false;
+    }
+
+    let Some(content_range) = content_range else {
+        return false;
+    };
+
+    content_range.starts_with(&format!("bytes {start_pos}-{end_pos}/"))
+}
+
 #[cfg(test)]
 mod tests {
     use super::*;
-    use std::time::{SystemTime, UNIX_EPOCH};
+    use reqwest::StatusCode;
+    use std::{collections::HashMap, time::{SystemTime, UNIX_EPOCH}};
 
     #[test]
     fn retry_delay_uses_exponential_backoff_with_cap() {
@@ -1597,7 +1731,7 @@ mod tests {
     #[tokio::test]
     async fn chunked_state_reuses_existing_prefix_from_streaming_resume() {
         let dest = temp_file("chunk-resume");
-        let state_path = storage::download_state_path(&dest).expect("derive state path");
+        let state_path = temp_file("chunk-resume-state");
         fs::write(&dest, vec![1u8; 250])
             .await
             .expect("write partial file");
@@ -1634,5 +1768,215 @@ mod tests {
 
         let _ = fs::remove_file(&dest).await;
         let _ = fs::remove_file(&state_path).await;
+    }
+
+    #[tokio::test]
+    async fn load_queue_from_state_requeues_inflight_tasks_as_pending() {
+        let queue_path = temp_file("queue-recovery");
+        let task_id = "recover-me".to_string();
+        let state = QueueState {
+            version: "1.0".to_string(),
+            tasks: vec![Task {
+                id: task_id.clone(),
+                url: "https://example.com/file.bin".to_string(),
+                dest: temp_file("recover-dest"),
+                status: TaskStatus::Downloading,
+                total_size: 100,
+                downloaded: 40,
+                created_at: 1,
+                error: None,
+                priority: TaskPriority::Normal,
+                speed: 1024,
+                eta: Some(8),
+                headers: HashMap::new(),
+                checksum: None,
+                speed_limit: None,
+                source: DownloadSource::Http {
+                    url: "https://example.com/file.bin".to_string(),
+                },
+                bt_info: None,
+                chunk_progress: None,
+            }],
+            created_at: 1,
+            updated_at: 1,
+        };
+        state.save(&queue_path).await.expect("save queue state");
+
+        let (downloader, _) = Hsi::with_config(Config::default(), 1, queue_path.clone(), BtConfig::default());
+        downloader
+            .load_queue_from_state()
+            .await
+            .expect("load queue state");
+
+        let task = downloader
+            .get_task(&task_id)
+            .await
+            .expect("restored task should exist");
+        assert_eq!(task.status, TaskStatus::Pending);
+        assert_eq!(task.speed, 0);
+        assert_eq!(task.eta, None);
+
+        let _ = fs::remove_file(queue_path).await;
+        let _ = remove_file_if_exists(&task.dest).await;
+    }
+
+    #[test]
+    fn chunked_download_rejects_responses_without_partial_content_metadata() {
+        assert!(!is_valid_chunk_response(
+            StatusCode::OK,
+            None,
+            0,
+            3
+        ));
+        assert!(!is_valid_chunk_response(
+            StatusCode::PARTIAL_CONTENT,
+            Some("bytes 0-7/8"),
+            0,
+            3
+        ));
+        assert!(is_valid_chunk_response(
+            StatusCode::PARTIAL_CONTENT,
+            Some("bytes 0-3/8"),
+            0,
+            3
+        ));
+    }
+
+    #[test]
+    fn streaming_plan_never_preserves_partial_bytes() {
+        let streaming = choose_download_plan(Some(8), false, 4);
+        assert_eq!(
+            streaming,
+            DownloadPlan::Streaming {
+                total_size: Some(8),
+                resumed_bytes: 0,
+            }
+        );
+
+        let chunked = choose_download_plan(Some(8), true, 4);
+        assert_eq!(
+            chunked,
+            DownloadPlan::Chunked {
+                total_size: 8,
+                resumed_bytes: 4,
+            }
+        );
+    }
+
+    #[tokio::test]
+    async fn completion_callback_finishes_before_completed_event_is_emitted() {
+        let queue_path = temp_file("completion-order-queue");
+        let (mut downloader, mut event_rx) =
+            Hsi::with_config(Config::default(), 1, queue_path.clone(), BtConfig::default());
+        let (callback_tx, mut callback_rx) = mpsc::channel(1);
+        let dest = temp_file("completion-order-output");
+
+        downloader.set_on_complete(move |task_id, result| {
+            let callback_tx = callback_tx.clone();
+            async move {
+                assert!(result.is_ok());
+                tokio::time::sleep(Duration::from_millis(100)).await;
+                let _ = callback_tx.send(task_id).await;
+            }
+        });
+
+        let task_id = "complete-me".to_string();
+        downloader.tasks.write().await.insert(
+            task_id.clone(),
+            Task {
+                id: task_id.clone(),
+                url: "https://example.com/done.bin".to_string(),
+                dest: dest.clone(),
+                status: TaskStatus::Downloading,
+                total_size: 4,
+                downloaded: 4,
+                created_at: 1,
+                error: None,
+                priority: TaskPriority::Normal,
+                speed: 0,
+                eta: None,
+                headers: HashMap::new(),
+                checksum: None,
+                speed_limit: None,
+                source: DownloadSource::Http {
+                    url: "https://example.com/done.bin".to_string(),
+                },
+                bt_info: None,
+                chunk_progress: None,
+            },
+        );
+
+        downloader
+            .finalize_task(task_id.clone(), Ok(()), downloader.on_complete.clone())
+            .await;
+
+        let completed_id = loop {
+            let event = event_rx.recv().await.expect("event should be emitted");
+            if let DownloaderEvent::Task(TaskEvent::Completed { task_id }) = event {
+                break task_id;
+            }
+        };
+
+        assert_eq!(completed_id, task_id);
+        assert_eq!(
+            callback_rx.try_recv().expect("callback should have completed before event"),
+            completed_id
+        );
+
+        let _ = fs::remove_file(&dest).await;
+        let _ = fs::remove_file(&queue_path).await;
+    }
+
+    #[tokio::test]
+    async fn remove_task_with_file_deletes_bittorrent_output_directory() {
+        let output_dir = std::env::temp_dir().join(format!(
+            "hsi-bt-output-{}",
+            SystemTime::now()
+                .duration_since(UNIX_EPOCH)
+                .unwrap_or_default()
+                .as_nanos()
+        ));
+        fs::create_dir_all(output_dir.join("nested"))
+            .await
+            .expect("create bt output directory");
+        let queue_path = temp_file("bt-remove-queue");
+        let (downloader, _) =
+            Hsi::with_config(Config::default(), 1, queue_path.clone(), BtConfig::default());
+        let task_id = "bt-task".to_string();
+
+        downloader.tasks.write().await.insert(
+            task_id.clone(),
+            Task {
+                id: task_id.clone(),
+                url: "magnet:?xt=urn:btih:deadbeef".to_string(),
+                dest: output_dir.clone(),
+                status: TaskStatus::Completed,
+                total_size: 0,
+                downloaded: 0,
+                created_at: 1,
+                error: None,
+                priority: TaskPriority::Normal,
+                speed: 0,
+                eta: None,
+                headers: HashMap::new(),
+                checksum: None,
+                speed_limit: None,
+                source: DownloadSource::BitTorrent {
+                    uri: "magnet:?xt=urn:btih:deadbeef".to_string(),
+                },
+                bt_info: None,
+                chunk_progress: None,
+            },
+        );
+
+        downloader
+            .remove_task_with_file(&task_id)
+            .await
+            .expect("remove bt task with directory output");
+
+        assert!(!output_dir.exists(), "BT output directory should be removed");
+        assert!(downloader.get_task(&task_id).await.is_none());
+
+        let _ = fs::remove_file(&queue_path).await;
     }
 }

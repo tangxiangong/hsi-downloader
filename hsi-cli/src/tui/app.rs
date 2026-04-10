@@ -248,6 +248,7 @@ impl App {
         let history = DownloadHistory::load(&history_path).await?;
         let (queue, event_rx) = ConfigStore::build_queue(&config, None, None).await?;
         queue.load_queue_from_state().await?;
+        queue.start_pending_tasks().await?;
         let tasks = queue.get_all_tasks().await;
         let theme = ThemeColors::from_app_theme(config.theme);
 

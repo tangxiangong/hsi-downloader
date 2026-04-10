@@ -58,7 +58,7 @@ const AddTaskDialog: Component<AddTaskDialogProps> = (props) => {
     setError("");
     if (newTab === "http") {
       setTorrentFiles([]);
-      setSelectedFiles(new Set());
+      setSelectedFiles(new Set<number>());
     } else {
       setChecksumType("none");
       setChecksumValue("");

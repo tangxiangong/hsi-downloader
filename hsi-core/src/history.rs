@@ -207,8 +207,17 @@ impl DownloadHistory {
 }
 
 async fn remove_file_if_exists(path: &Path) -> Result<()> {
-    match fs_err::tokio::remove_file(path).await {
-        Ok(()) => Ok(()),
+    match fs_err::tokio::metadata(path).await {
+        Ok(metadata) if metadata.is_dir() => match fs_err::tokio::remove_dir_all(path).await {
+            Ok(()) => Ok(()),
+            Err(err) if err.kind() == ErrorKind::NotFound => Ok(()),
+            Err(err) => Err(err.into()),
+        },
+        Ok(_) => match fs_err::tokio::remove_file(path).await {
+            Ok(()) => Ok(()),
+            Err(err) if err.kind() == ErrorKind::NotFound => Ok(()),
+            Err(err) => Err(err.into()),
+        },
         Err(err) if err.kind() == ErrorKind::NotFound => Ok(()),
         Err(err) => Err(err.into()),
     }
@@ -305,6 +314,39 @@ mod tests {
             DownloadHistory::remove_entry_and_file_from_file(&path, "artifact")
                 .await
                 .expect("remove history and file");
+        assert!(removed);
+        assert!(history.completed_tasks.is_empty());
+        assert!(!artifact.exists());
+
+        let _ = fs_err::tokio::remove_file(path).await;
+    }
+
+    #[tokio::test]
+    async fn remove_entry_and_file_from_file_deletes_directory_artifact() {
+        let path = temp_file("history-delete-directory");
+        let artifact = std::env::temp_dir().join(format!(
+            "hsi-history-delete-dir-{}",
+            SystemTime::now()
+                .duration_since(UNIX_EPOCH)
+                .unwrap_or_default()
+                .as_nanos()
+        ));
+        fs_err::tokio::create_dir_all(artifact.join("nested"))
+            .await
+            .expect("create directory artifact");
+
+        let history = DownloadHistory::append_completed_to_file(
+            &path,
+            sample_task("artifact-dir", &artifact.display().to_string()),
+        )
+        .await
+        .expect("append history");
+        assert_eq!(history.completed_tasks.len(), 1);
+
+        let (history, removed) =
+            DownloadHistory::remove_entry_and_file_from_file(&path, "artifact-dir")
+                .await
+                .expect("remove history and directory");
         assert!(removed);
         assert!(history.completed_tasks.is_empty());
         assert!(!artifact.exists());

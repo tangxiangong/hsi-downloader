@@ -91,8 +91,10 @@ pub async fn clear_completed(state: State<'_, AppState>) -> Result<(), String> {
 
 #[tauri::command]
 pub async fn get_history(state: State<'_, AppState>) -> Result<Vec<CompletedTask>, String> {
-    let history = state.history.read().await;
-    Ok(history.get_all().to_vec())
+    state
+        .refresh_history_from_disk()
+        .await
+        .map_err(|e| e.to_string())
 }
 
 #[tauri::command]
