@@ -20,6 +20,13 @@ export interface BtTaskInfo {
   selected_files: number[] | null;
 }
 
+export interface ChunkProgressInfo {
+  index: number;
+  downloaded: number;
+  size: number;
+  complete: boolean;
+}
+
 export interface BtConfig {
   dht_enabled: boolean;
   upload_limit: number | null;
@@ -51,6 +58,7 @@ export interface DownloadTask {
   speed_limit: number | null;
   source: DownloadSource;
   bt_info: BtTaskInfo | null;
+  chunk_progress?: ChunkProgressInfo[] | null;
 }
 
 export interface CompletedTask {
@@ -107,7 +115,13 @@ export type TaskEvent =
   | { Cancelled: { task_id: string } };
 
 export type ProgressEvent =
-  | { Initialized: { task_id: string; total_size: number | null } }
+  | {
+      Initialized: {
+        task_id: string;
+        total_size: number | null;
+        chunks?: ChunkProgressInfo[] | null;
+      };
+    }
   | {
       Updated: {
         task_id: string;
@@ -115,6 +129,15 @@ export type ProgressEvent =
         total: number;
         speed: number;
         eta: number | null;
+      };
+    }
+  | {
+      ChunkProgress: {
+        task_id: string;
+        chunk_index: number;
+        downloaded: number;
+        size: number;
+        complete: boolean;
       };
     }
   | { Finished: { task_id: string } }

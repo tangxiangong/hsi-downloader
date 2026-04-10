@@ -1,10 +1,13 @@
 {
   "identifier": "default",
   "description": "Default capabilities for YuShi",
-  "windows": ["main"],
+  "windows": ["main", "tray"],
   "permissions": [
     "core:default",
     "dialog:default",
-    "updater:default"
+    "updater:default",
+    "nspopover:allow-show-popover",
+    "nspopover:allow-hide-popover",
+    "nspopover:allow-is-popover-shown"
   ]
 }

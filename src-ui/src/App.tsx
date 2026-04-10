@@ -1,4 +1,5 @@
-import { type Component, createSignal, onMount, Match, Switch } from "solid-js";
+import { getCurrentWebviewWindow } from "@tauri-apps/api/webviewWindow";
+import { type Component, createSignal, onCleanup, onMount, Match, Switch } from "solid-js";
 import Sidebar, { type Page } from "./components/Sidebar";
 import TasksPage from "./pages/TasksPage";
 import HistoryPage from "./pages/HistoryPage";
@@ -6,6 +7,10 @@ import SettingsPage from "./pages/SettingsPage";
 import { loadConfig } from "./stores/config-store";
 import { loadTasks, setupTaskEvents } from "./stores/task-store";
 import { loadHistory } from "./stores/history-store";
+
+interface NavigateMainPayload {
+  page?: Page;
+}
 
 const App: Component = () => {
   const [page, setPage] = createSignal<Page>("tasks");
@@ -15,6 +20,17 @@ const App: Component = () => {
     await loadTasks();
     await loadHistory();
     setupTaskEvents();
+
+    const unlisten = await getCurrentWebviewWindow().listen<NavigateMainPayload>(
+      "navigate-main",
+      (event) => {
+        setPage(event.payload.page ?? "tasks");
+      },
+    );
+
+    onCleanup(() => {
+      void unlisten();
+    });
   });
 
   return (

@@ -5,12 +5,20 @@ mod state;
 mod tray;
 
 use state::AppState;
-use tauri::{Emitter, Manager, WindowEvent};
+use tauri::{Emitter, Manager};
 
 fn main() {
-    tauri::Builder::default()
+    let builder = tauri::Builder::default()
         .plugin(tauri_plugin_dialog::init())
-        .plugin(tauri_plugin_updater::Builder::new().build())
+        .plugin(tauri_plugin_updater::Builder::new().build());
+
+    #[cfg(target_os = "macos")]
+    let builder = builder.plugin(tauri_plugin_nspopover::init());
+
+    #[cfg(any(target_os = "linux", windows))]
+    let builder = builder.plugin(tauri_plugin_positioner::init());
+
+    builder
         .setup(|app| {
             let handle = app.handle().clone();
 
@@ -29,19 +37,8 @@ fn main() {
                 });
             });
 
-            // Setup tray icon
             tray::setup_tray(app.handle())?;
-
-            // Hide window on close instead of quitting
-            if let Some(window) = app.get_webview_window("main") {
-                let win = window.clone();
-                window.on_window_event(move |event| {
-                    if let WindowEvent::CloseRequested { api, .. } = event {
-                        api.prevent_close();
-                        let _ = win.hide();
-                    }
-                });
-            }
+            tray::register_window_handlers(app.handle());
 
             Ok(())
         })

@@ -3,9 +3,11 @@ use crate::{
     bt::{BtEngine, detect_source, spawn_bt_progress_poller},
     config::BtConfig,
     state::{ChunkState, DownloadState, QueueState, current_timestamp},
+    storage,
     types::{
-        AddTaskOptions, BtTaskInfo, CompletionCallback, Config, DownloadSource, DownloaderEvent,
-        ProgressEvent, Task, TaskEvent, TaskPriority, TaskStatus, TorrentFileInfo,
+        AddTaskOptions, BtTaskInfo, ChunkProgressInfo, CompletionCallback, Config,
+        DownloadSource, DownloaderEvent, ProgressEvent, Task, TaskEvent, TaskPriority,
+        TaskStatus, TorrentFileInfo,
         VerificationEvent,
     },
     utils::{
@@ -406,7 +408,7 @@ impl YuShi {
         speed_limit: Option<u64>,
     ) -> Result<()> {
         let dest_path = PathBuf::from(dest);
-        let state_path = dest_path.with_extension("json");
+        let state_path = storage::migrate_download_state_file(&dest_path).await?;
 
         let state = self
             .get_or_create_state(url, &dest_path, &state_path)
@@ -418,10 +420,29 @@ impl YuShi {
             (s.total_size, s.is_streaming)
         };
 
+        let chunk_progress = if is_streaming {
+            None
+        } else {
+            let state_snapshot = state.read().await;
+            Some(
+                state_snapshot
+                    .chunks
+                    .iter()
+                    .map(|chunk| ChunkProgressInfo {
+                        index: chunk.index,
+                        downloaded: chunk.current.saturating_sub(chunk.start),
+                        size: chunk.end.saturating_sub(chunk.start) + 1,
+                        complete: chunk.is_finished,
+                    })
+                    .collect(),
+            )
+        };
+
         event_tx
             .send(ProgressEvent::Initialized {
                 task_id: "internal".to_string(),
                 total_size,
+                chunks: chunk_progress,
             })
             .await?;
 
@@ -944,6 +965,7 @@ impl YuShi {
                 selected_files: Some(files),
                 ..Default::default()
             }),
+            chunk_progress: None,
         };
 
         {
@@ -1044,6 +1066,7 @@ impl YuShi {
             // 进度监听器
             tokio::spawn(async move {
                 let mut total = 0u64;
+                let mut chunk_progress = Vec::<ChunkProgressInfo>::new();
                 // 本次会话新增的字节数（从 0 开始），用于速度计算
                 // 历史已下载字节通过 initial_downloaded 偏移量补偿
                 let mut session_downloaded = 0u64;
@@ -1051,18 +1074,25 @@ impl YuShi {
 
                 while let Some(event) = rx.recv().await {
                     match event {
-                        ProgressEvent::Initialized { total_size, .. } => {
+                        ProgressEvent::Initialized {
+                            total_size, chunks, ..
+                        } => {
                             if let Some(size) = total_size {
                                 total = size;
+                            }
+                            if let Some(chunks) = chunks {
+                                chunk_progress = chunks;
                             }
                             {
                                 let mut tasks = tasks_clone.write().await;
                                 if let Some(task) = tasks.get_mut(&task_id_clone) {
                                     task.total_size = total_size.unwrap_or(0);
+                                    task.chunk_progress = (!chunk_progress.is_empty())
+                                        .then_some(chunk_progress.clone());
                                 }
                             }
                         }
-                        ProgressEvent::ChunkDownloading { delta, .. } => {
+                        ProgressEvent::ChunkDownloading { chunk_index, delta } => {
                             session_downloaded += delta;
                             // 断点续传：加上历史偏移量，得到文件维度的真实进度
                             let total_downloaded = initial_downloaded + session_downloaded;
@@ -1081,7 +1111,25 @@ impl YuShi {
                                     task.downloaded = total_downloaded;
                                     task.speed = speed;
                                     task.eta = eta;
+                                    if let Some(chunk) = chunk_progress.get_mut(chunk_index) {
+                                        chunk.downloaded = (chunk.downloaded + delta).min(chunk.size);
+                                        chunk.complete = chunk.downloaded >= chunk.size;
+                                    }
+                                    task.chunk_progress = (!chunk_progress.is_empty())
+                                        .then_some(chunk_progress.clone());
                                 }
+                            }
+
+                            if let Some(chunk) = chunk_progress.get(chunk_index) {
+                                let _ = queue_event_tx_clone
+                                    .send(DownloaderEvent::Progress(ProgressEvent::ChunkProgress {
+                                        task_id: task_id_clone.clone(),
+                                        chunk_index,
+                                        downloaded: chunk.downloaded,
+                                        size: chunk.size,
+                                        complete: chunk.complete,
+                                    }))
+                                    .await;
                             }
 
                             let _ = queue_event_tx_clone
@@ -1107,6 +1155,7 @@ impl YuShi {
                                     task.downloaded = stream_downloaded;
                                     task.speed = speed;
                                     task.eta = None; // 流式下载无法预估剩余时间
+                                    task.chunk_progress = None;
                                 }
                             }
 
@@ -1413,8 +1462,10 @@ impl YuShi {
             task.status = TaskStatus::Cancelled;
             if !is_bt {
                 let _ = fs::remove_file(&task.dest).await;
-                let state_path = task.dest.with_extension("json");
-                let _ = fs::remove_file(state_path).await;
+                if let Ok(state_path) = storage::download_state_path(&task.dest) {
+                    let _ = fs::remove_file(state_path).await;
+                }
+                let _ = fs::remove_file(task.dest.with_extension("json")).await;
             }
         }
         drop(tasks);
@@ -1467,6 +1518,9 @@ impl YuShi {
         };
 
         remove_file_if_exists(&task.dest).await?;
+        if let Ok(state_path) = storage::download_state_path(&task.dest) {
+            remove_file_if_exists(&state_path).await?;
+        }
         remove_file_if_exists(&task.dest.with_extension("json")).await?;
         self.remove_task(task_id).await
     }
@@ -1530,7 +1584,7 @@ mod tests {
     #[tokio::test]
     async fn chunked_state_reuses_existing_prefix_from_streaming_resume() {
         let dest = temp_file("chunk-resume");
-        let state_path = dest.with_extension("json");
+        let state_path = storage::download_state_path(&dest).expect("derive state path");
         fs::write(&dest, vec![1u8; 250])
             .await
             .expect("write partial file");

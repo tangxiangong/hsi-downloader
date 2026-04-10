@@ -2211,6 +2211,42 @@
           "markdownDescription": "Denies the save command without any pre-configured scope."
         },
         {
+          "description": "Enables the hide_popover command without any pre-configured scope.",
+          "type": "string",
+          "const": "nspopover:allow-hide-popover",
+          "markdownDescription": "Enables the hide_popover command without any pre-configured scope."
+        },
+        {
+          "description": "Enables the is_popover_shown command without any pre-configured scope.",
+          "type": "string",
+          "const": "nspopover:allow-is-popover-shown",
+          "markdownDescription": "Enables the is_popover_shown command without any pre-configured scope."
+        },
+        {
+          "description": "Enables the show_popover command without any pre-configured scope.",
+          "type": "string",
+          "const": "nspopover:allow-show-popover",
+          "markdownDescription": "Enables the show_popover command without any pre-configured scope."
+        },
+        {
+          "description": "Denies the hide_popover command without any pre-configured scope.",
+          "type": "string",
+          "const": "nspopover:deny-hide-popover",
+          "markdownDescription": "Denies the hide_popover command without any pre-configured scope."
+        },
+        {
+          "description": "Denies the is_popover_shown command without any pre-configured scope.",
+          "type": "string",
+          "const": "nspopover:deny-is-popover-shown",
+          "markdownDescription": "Denies the is_popover_shown command without any pre-configured scope."
+        },
+        {
+          "description": "Denies the show_popover command without any pre-configured scope.",
+          "type": "string",
+          "const": "nspopover:deny-show-popover",
+          "markdownDescription": "Denies the show_popover command without any pre-configured scope."
+        },
+        {
           "description": "This permission set configures which kind of\nupdater functions are exposed to the frontend.\n\n#### Granted Permissions\n\nThe full workflow from checking for updates to installing them\nis enabled.\n\n\n#### This default permission set includes:\n\n- `allow-check`\n- `allow-download`\n- `allow-install`\n- `allow-download-and-install`",
           "type": "string",
           "const": "updater:default",

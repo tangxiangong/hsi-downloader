@@ -17,3 +17,9 @@ tauri-plugin-dialog = "2"
 tauri-plugin-updater = "2"
 tokio = { workspace = true, features = ["macros"] }
 yushi-core = { workspace = true }
+
+[target.'cfg(target_os = "macos")'.dependencies]
+tauri-plugin-nspopover = { git = "https://github.com/freethinkel/tauri-nspopover-plugin.git", version = "4.0.2" }
+
+[target.'cfg(any(target_os = "linux", windows))'.dependencies]
+tauri-plugin-positioner = { version = "2.3.1", features = ["tray-icon"] }

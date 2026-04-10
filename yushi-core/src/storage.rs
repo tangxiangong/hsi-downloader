@@ -4,10 +4,12 @@ use std::{
     path::{Path, PathBuf},
     time::{Duration, SystemTime, UNIX_EPOCH},
 };
+use sha2::{Digest, Sha256};
 use tokio::time::sleep;
 
 const APP_DIR: &str = "yushi";
 const LEGACY_TAURI_IDENTIFIER: &str = "com.tangxiangong.YuShi";
+const RESUME_DIR: &str = "resume";
 const LOCK_RETRY_DELAY: Duration = Duration::from_millis(50);
 const LOCK_STALE_TIMEOUT: Duration = Duration::from_secs(30);
 
@@ -27,6 +29,32 @@ pub fn history_path() -> Result<PathBuf> {
 
 pub fn queue_state_path() -> Result<PathBuf> {
     Ok(storage_dir()?.join("queue.json"))
+}
+
+pub fn resume_state_dir() -> Result<PathBuf> {
+    Ok(storage_dir()?.join(RESUME_DIR))
+}
+
+pub fn download_state_path(dest: &Path) -> Result<PathBuf> {
+    let mut hasher = Sha256::new();
+    hasher.update(dest.as_os_str().to_string_lossy().as_bytes());
+    let digest = hasher.finalize();
+    Ok(resume_state_dir()?.join(format!("{}.json", hex::encode(digest))))
+}
+
+pub async fn migrate_download_state_file(dest: &Path) -> Result<PathBuf> {
+    let target = download_state_path(dest)?;
+    let legacy = dest.with_extension("json");
+
+    if target.exists() || !legacy.exists() {
+        return Ok(target);
+    }
+
+    ensure_parent_dir(&target).await?;
+    fs::copy(&legacy, &target).await?;
+    let _ = fs::remove_file(&legacy).await;
+
+    Ok(target)
 }
 
 pub async fn ensure_parent_dir(path: &Path) -> Result<()> {
@@ -134,4 +162,19 @@ fn legacy_candidates(file_name: &str) -> Vec<PathBuf> {
     }
 
     candidates
+}
+
+#[cfg(test)]
+mod tests {
+    use super::*;
+
+    #[test]
+    fn download_state_path_is_stored_under_app_resume_dir() {
+        let dest = PathBuf::from("/tmp/example/file.iso");
+        let state_path = download_state_path(&dest).expect("derive state path");
+
+        assert!(state_path.starts_with(resume_state_dir().expect("resume state dir")));
+        assert_eq!(state_path.extension().and_then(|ext| ext.to_str()), Some("json"));
+        assert!(!state_path.starts_with("/tmp/example"));
+    }
 }

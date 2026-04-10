@@ -19,10 +19,14 @@ pub use bt::{BtEngine, detect_source, spawn_bt_progress_poller};
 pub use config::{AppConfig, BtConfig};
 pub use downloader::YuShi;
 pub use history::{CompletedTask, DownloadHistory};
-pub use storage::{config_path, history_path, queue_state_path, storage_dir};
+pub use storage::{
+    config_path, download_state_path, history_path, migrate_download_state_file, queue_state_path,
+    resume_state_dir, storage_dir,
+};
 pub use types::{
     BtTaskInfo,
     ChecksumType,
+    ChunkProgressInfo,
     // 回调类型
     CompletionCallback,
     Config,

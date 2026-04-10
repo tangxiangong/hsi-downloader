@@ -77,6 +77,19 @@ pub struct BtTaskInfo {
     pub selected_files: Option<Vec<usize>>,
 }
 
+/// HTTP 分块下载进度
+#[derive(Debug, Clone, Default, Serialize, Deserialize)]
+pub struct ChunkProgressInfo {
+    /// 分块索引
+    pub index: usize,
+    /// 当前分块已下载字节数
+    pub downloaded: u64,
+    /// 当前分块总字节数
+    pub size: u64,
+    /// 当前分块是否完成
+    pub complete: bool,
+}
+
 /// 种子文件信息（用于文件选择性下载）
 #[derive(Debug, Clone, Serialize, Deserialize)]
 pub struct TorrentFileInfo {
@@ -128,6 +141,7 @@ pub enum ProgressEvent {
     Initialized {
         task_id: String,
         total_size: Option<u64>,
+        chunks: Option<Vec<ChunkProgressInfo>>,
     },
     /// 进度更新
     Updated {
@@ -141,7 +155,9 @@ pub enum ProgressEvent {
     ChunkProgress {
         task_id: String,
         chunk_index: usize,
-        delta: u64,
+        downloaded: u64,
+        size: u64,
+        complete: bool,
     },
     /// 流式下载进度更新（内部使用）
     StreamProgress { task_id: String, downloaded: u64 },
@@ -232,6 +248,9 @@ pub struct Task {
     /// BitTorrent 扩展信息
     #[serde(default)]
     pub bt_info: Option<BtTaskInfo>,
+    /// HTTP 分块下载进度信息
+    #[serde(default)]
+    pub chunk_progress: Option<Vec<ChunkProgressInfo>>,
 }
 
 /// 下载任务（向后兼容）
@@ -351,6 +370,7 @@ mod tests {
             _ => panic!("expected Http source for backward compat"),
         }
         assert!(task.bt_info.is_none());
+        assert!(task.chunk_progress.is_none());
     }
 
     #[test]

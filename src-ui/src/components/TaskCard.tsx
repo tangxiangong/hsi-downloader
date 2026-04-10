@@ -1,6 +1,7 @@
 import { type Component, Show } from "solid-js";
+import ChunkedProgressBar from "./ChunkedProgressBar";
 import type { DownloadTask } from "../lib/types";
-import { formatBytes, formatSpeed, formatEta, statusLabel, getFileIcon, progressClass } from "../lib/format";
+import { formatBytes, formatSpeed, formatEta, statusLabel, getFileIcon } from "../lib/format";
 import { pauseTask, resumeTask, cancelTask, retryTask, removeTask, removeTaskWithFile } from "../lib/commands";
 import { refreshTasks } from "../stores/task-store";
 
@@ -99,11 +100,7 @@ const TaskCard: Component<TaskCardProps> = (props) => {
         {/* Row 2: Progress bar */}
         <Show when={t().total_size > 0 || t().status === "Downloading"}>
           <div class="flex items-center gap-2 mt-2">
-            <progress
-              class={`progress h-1.5 flex-1 ${progressClass(t().status)}`}
-              value={progress()}
-              max="100"
-            />
+            <ChunkedProgressBar task={t()} />
             <span class="text-xs font-medium text-base-content/60 w-10 text-right">
               {Math.round(progress())}%
             </span>

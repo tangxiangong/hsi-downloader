@@ -38,7 +38,7 @@ const AddTaskDialog: Component<AddTaskDialogProps> = (props) => {
     try {
       const files = await listTorrentFiles(url());
       setTorrentFiles(files);
-      setSelectedFiles(new Set(files.map((f) => f.index)));
+      setSelectedFiles(new Set<number>(files.map((f) => f.index)));
     } catch (err) {
       setError(String(err));
     } finally {
@@ -47,11 +47,11 @@ const AddTaskDialog: Component<AddTaskDialogProps> = (props) => {
   }
 
   function selectAll() {
-    setSelectedFiles(new Set(torrentFiles().map((f) => f.index)));
+    setSelectedFiles(new Set<number>(torrentFiles().map((f) => f.index)));
   }
 
   function selectNone() {
-    setSelectedFiles(new Set());
+    setSelectedFiles(new Set<number>());
   }
 
   function toggleFile(index: number) {
@@ -110,7 +110,7 @@ const AddTaskDialog: Component<AddTaskDialogProps> = (props) => {
                 setUrl(e.currentTarget.value);
                 // Reset torrent files when URL changes
                 setTorrentFiles([]);
-                setSelectedFiles(new Set());
+                setSelectedFiles(new Set<number>());
               }}
             />
           </div>
