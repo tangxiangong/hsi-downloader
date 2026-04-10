@@ -1,9 +1,9 @@
 use crate::state::AppState;
-use std::path::PathBuf;
-use tauri::State;
-use yushi_core::{
+use hsi_core::{
     AppConfig, CompletedTask, DownloadHistory, Task, TorrentFileInfo, types::AddTaskOptions,
 };
+use std::path::PathBuf;
+use tauri::State;
 
 #[tauri::command]
 pub async fn get_tasks(state: State<'_, AppState>) -> Result<Vec<Task>, String> {

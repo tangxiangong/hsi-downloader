@@ -5,9 +5,8 @@ use crate::{
     state::{ChunkState, DownloadState, QueueState, current_timestamp},
     storage,
     types::{
-        AddTaskOptions, BtTaskInfo, ChunkProgressInfo, CompletionCallback, Config,
-        DownloadSource, DownloaderEvent, ProgressEvent, Task, TaskEvent, TaskPriority,
-        TaskStatus, TorrentFileInfo,
+        AddTaskOptions, BtTaskInfo, ChunkProgressInfo, CompletionCallback, Config, DownloadSource,
+        DownloaderEvent, ProgressEvent, Task, TaskEvent, TaskPriority, TaskStatus, TorrentFileInfo,
         VerificationEvent,
     },
     utils::{
@@ -1125,7 +1124,8 @@ impl Hsi {
                                     task.speed = speed;
                                     task.eta = eta;
                                     if let Some(chunk) = chunk_progress.get_mut(chunk_index) {
-                                        chunk.downloaded = (chunk.downloaded + delta).min(chunk.size);
+                                        chunk.downloaded =
+                                            (chunk.downloaded + delta).min(chunk.size);
                                         chunk.complete = chunk.downloaded >= chunk.size;
                                     }
                                     task.chunk_progress = (!chunk_progress.is_empty())
