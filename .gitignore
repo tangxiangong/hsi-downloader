@@ -28,5 +28,6 @@ target/
 
 .claude/settings.local.json
 .claude/settings.json
+.claude/launch.json
 .superpowers/
 .worktrees/
