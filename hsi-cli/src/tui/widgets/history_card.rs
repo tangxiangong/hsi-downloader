@@ -1,3 +1,5 @@
+use crate::{tui::theme::ThemeColors, ui::format_size};
+use hsi_core::CompletedTask;
 use ratatui::{
     Frame,
     layout::{Constraint, Layout, Rect},
@@ -5,10 +7,6 @@ use ratatui::{
     text::{Line, Span},
     widgets::{Block, Borders, Paragraph},
 };
-use yushi_core::CompletedTask;
-
-use crate::tui::theme::ThemeColors;
-use crate::ui::format_size;
 
 /// Height of a single history card including borders.
 pub fn card_height() -> u16 {

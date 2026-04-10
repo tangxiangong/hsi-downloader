@@ -2,8 +2,8 @@ use clap::{Parser, Subcommand};
 use std::path::PathBuf;
 
 #[derive(Parser)]
-#[command(name = "yushi")]
-#[command(about = "YuShi - 高性能多线程下载器", long_about = None)]
+#[command(name = "hsi")]
+#[command(about = "Hsi - 高性能多线程下载器", long_about = None)]
 #[command(version)]
 pub struct Cli {
     #[command(subcommand)]

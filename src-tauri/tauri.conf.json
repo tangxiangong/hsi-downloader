@@ -1,7 +1,7 @@
 {
-  "productName": "YuShi",
+  "productName": "hsi",
   "version": "0.1.0",
-  "identifier": "com.yushi.app",
+  "identifier": "com.tangxiangong.hsi.app",
   "build": {
     "devUrl": "http://localhost:5173",
     "frontendDist": "../src-ui/dist",
@@ -20,7 +20,7 @@
       },
       {
         "label": "tray",
-        "title": "驭时下载概览",
+        "title": "hsi",
         "width": 430,
         "height": 460,
         "visible": false,
@@ -52,7 +52,7 @@
   "plugins": {
     "updater": {
       "endpoints": [
-        "https://github.com/tangxiangong/YuShi/releases/latest/download/latest.json"
+        "https://github.com/tangxiangong/hsi-downloader/releases/latest/download/latest.json"
       ],
       "pubkey": ""
     }

@@ -1,6 +1,6 @@
 {
   "identifier": "default",
-  "description": "Default capabilities for YuShi",
+  "description": "Default capabilities for Hsi",
   "windows": ["main", "tray"],
   "permissions": [
     "core:default",

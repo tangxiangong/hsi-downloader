@@ -12,7 +12,7 @@ permissions:
 env:
   CARGO_TERM_COLOR: always
   CARGO_TARGET_DIR: target
-  APP_NAME: yushi
+  APP_NAME: hsi
 
 jobs:
   package-cli:
@@ -55,7 +55,7 @@ jobs:
           shared-key: cli-release-${{ matrix.target }}
 
       - name: Build CLI with TUI
-        run: cargo build -p yushi-cli --release --target ${{ matrix.target }} --locked
+        run: cargo build -p hsi-cli --release --target ${{ matrix.target }} --locked
 
       - name: Prepare CLI artifacts on Unix
         if: runner.os != 'Windows'
@@ -74,7 +74,7 @@ jobs:
           Compress-Archive -Path "dist/${env:APP_NAME}.exe" -DestinationPath "dist/${env:APP_NAME}-cli-${{ matrix.artifact_suffix }}-tui.zip" -Force
 
       - name: Build CLI without TUI
-        run: cargo build -p yushi-cli --release --target ${{ matrix.target }} --no-default-features --locked
+        run: cargo build -p hsi-cli --release --target ${{ matrix.target }} --no-default-features --locked
 
       - name: Prepare non-TUI artifacts on Unix
         if: runner.os != 'Windows'

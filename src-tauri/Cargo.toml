@@ -1,5 +1,5 @@
 [package]
-name = "yushi"
+name = "hsi"
 version.workspace = true
 authors.workspace = true
 edition.workspace = true
@@ -10,13 +10,13 @@ tauri-build = { version = "2", features = [] }
 
 [dependencies]
 anyhow = { workspace = true }
+hsi-core = { workspace = true }
 serde = { workspace = true }
 serde_json = { workspace = true }
-tauri = { version = "2", features = ["tray-icon"] }
+tauri = { version = "2", features = ["tray-icon", "image-png"] }
 tauri-plugin-dialog = "2"
 tauri-plugin-updater = "2"
 tokio = { workspace = true, features = ["macros"] }
-yushi-core = { workspace = true }
 
 [target.'cfg(target_os = "macos")'.dependencies]
 tauri-plugin-nspopover = { git = "https://github.com/freethinkel/tauri-nspopover-plugin.git", version = "4.0.2" }

@@ -4,9 +4,9 @@ use crate::{
     ui::{format_size, print_error, print_info, print_success},
 };
 use anyhow::{Result, anyhow};
+use hsi_core::{ChecksumType, Hsi, ProgressEvent, parse_speed_limit};
 use indicatif::{ProgressBar, ProgressStyle};
 use tokio::sync::mpsc;
-use yushi_core::{ChecksumType, ProgressEvent, YuShi, parse_speed_limit};
 
 pub async fn execute(args: DownloadArgs) -> Result<()> {
     let app_config = ConfigStore::load().await?;
@@ -40,10 +40,9 @@ pub async fn execute(args: DownloadArgs) -> Result<()> {
     }
 
     let temp_dir = std::env::temp_dir();
-    let queue_state_path = temp_dir.join(format!("yushi_temp_{}.json", std::process::id()));
+    let queue_state_path = temp_dir.join(format!("hsi_temp_{}.json", std::process::id()));
 
-    let (downloader, _) =
-        YuShi::with_config(config, 1, queue_state_path.clone(), Default::default());
+    let (downloader, _) = Hsi::with_config(config, 1, queue_state_path.clone(), Default::default());
     let output = if let Some(path) = args.output {
         if path.is_absolute() {
             path
@@ -105,13 +104,13 @@ pub async fn execute(args: DownloadArgs) -> Result<()> {
                         bar.set_position(downloaded);
                     }
                 }
-                ProgressEvent::ChunkProgress { delta, .. }
-                | ProgressEvent::ChunkDownloading { delta, .. } => {
+                ProgressEvent::ChunkDownloading { delta, .. } => {
                     downloaded += delta;
                     if let Some(ref bar) = pb {
                         bar.set_position(downloaded);
                     }
                 }
+                ProgressEvent::ChunkProgress { .. } => {}
                 ProgressEvent::Finished { .. } => {
                     if let Some(bar) = pb.take() {
                         bar.finish_with_message("下载完成");
@@ -148,7 +147,7 @@ pub async fn execute(args: DownloadArgs) -> Result<()> {
             if let Some(md5) = args.md5 {
                 print_info("验证 MD5...");
                 let checksum = ChecksumType::Md5(md5);
-                match yushi_core::verify_file(&output, &checksum).await {
+                match hsi_core::verify_file(&output, &checksum).await {
                     Ok(true) => print_success("MD5 校验通过"),
                     Ok(false) => {
                         print_error("MD5 校验失败");
@@ -164,7 +163,7 @@ pub async fn execute(args: DownloadArgs) -> Result<()> {
             if let Some(sha256) = args.sha256 {
                 print_info("验证 SHA256...");
                 let checksum = ChecksumType::Sha256(sha256);
-                match yushi_core::verify_file(&output, &checksum).await {
+                match hsi_core::verify_file(&output, &checksum).await {
                     Ok(true) => print_success("SHA256 校验通过"),
                     Ok(false) => {
                         print_error("SHA256 校验失败");

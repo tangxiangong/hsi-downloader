@@ -1,5 +1,5 @@
 [package]
-name = "yushi-core"
+name = "hsi-core"
 authors.workspace = true
 version.workspace = true
 edition.workspace = true

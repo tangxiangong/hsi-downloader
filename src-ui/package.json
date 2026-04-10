@@ -1,5 +1,5 @@
 {
-  "name": "yushi-ui",
+  "name": "hsi-ui",
   "private": true,
   "version": "0.1.0",
   "type": "module",
@@ -23,6 +23,7 @@
     "tailwindcss": "^4",
     "typescript": "^5.7",
     "vite": "^6",
-    "vite-plugin-solid": "^2"
+    "vite-plugin-solid": "^2",
+    "vite-plugin-solid-svg": "^0.8.1"
   }
 }

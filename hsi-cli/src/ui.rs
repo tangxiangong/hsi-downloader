@@ -1,8 +1,8 @@
 use console::style;
+use hsi_core::utils::XByte;
 use indicatif::{MultiProgress, ProgressBar, ProgressStyle};
 use std::{collections::HashMap, sync::Arc};
 use tokio::sync::RwLock;
-use yushi_core::utils::XByte;
 
 pub struct ProgressManager {
     multi: MultiProgress,

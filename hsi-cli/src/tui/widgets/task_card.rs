@@ -1,3 +1,5 @@
+use crate::{tui::theme::ThemeColors, ui::format_size};
+use hsi_core::{DownloadTask, TaskStatus};
 use ratatui::{
     Frame,
     layout::{Constraint, Layout, Rect},
@@ -5,10 +7,6 @@ use ratatui::{
     text::{Line, Span},
     widgets::{Block, Borders, Gauge, Paragraph},
 };
-use yushi_core::{DownloadTask, TaskStatus};
-
-use crate::tui::theme::ThemeColors;
-use crate::ui::format_size;
 
 /// Height of a single task card including borders.
 pub fn card_height() -> u16 {

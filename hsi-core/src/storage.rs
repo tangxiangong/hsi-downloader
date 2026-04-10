@@ -1,14 +1,14 @@
 use crate::{Error, Result};
 use fs_err::tokio as fs;
+use sha2::{Digest, Sha256};
 use std::{
     path::{Path, PathBuf},
     time::{Duration, SystemTime, UNIX_EPOCH},
 };
-use sha2::{Digest, Sha256};
 use tokio::time::sleep;
 
-const APP_DIR: &str = "yushi";
-const LEGACY_TAURI_IDENTIFIER: &str = "com.tangxiangong.YuShi";
+const APP_DIR: &str = "hsi";
+const LEGACY_TAURI_IDENTIFIER: &str = "com.tangxiangong.hsi.app";
 const RESUME_DIR: &str = "resume";
 const LOCK_RETRY_DELAY: Duration = Duration::from_millis(50);
 const LOCK_STALE_TIMEOUT: Duration = Duration::from_secs(30);
@@ -174,7 +174,10 @@ mod tests {
         let state_path = download_state_path(&dest).expect("derive state path");
 
         assert!(state_path.starts_with(resume_state_dir().expect("resume state dir")));
-        assert_eq!(state_path.extension().and_then(|ext| ext.to_str()), Some("json"));
+        assert_eq!(
+            state_path.extension().and_then(|ext| ext.to_str()),
+            Some("json")
+        );
         assert!(!state_path.starts_with("/tmp/example"));
     }
 }

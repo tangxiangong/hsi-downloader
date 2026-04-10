@@ -1,9 +1,9 @@
 use anyhow::{Context, Result};
-use std::path::{Path, PathBuf};
-use yushi_core::{
-    AppConfig, CompletedTask, DownloadHistory, DownloaderEvent, TaskStatus, YuShi, config_path,
+use hsi_core::{
+    AppConfig, CompletedTask, DownloadHistory, DownloaderEvent, Hsi, TaskStatus, config_path,
     history_path, queue_state_path,
 };
+use std::path::{Path, PathBuf};
 
 pub struct ConfigStore;
 
@@ -43,14 +43,14 @@ impl ConfigStore {
         config: &AppConfig,
         connections: Option<usize>,
         max_tasks: Option<usize>,
-    ) -> Result<(YuShi, tokio::sync::mpsc::Receiver<DownloaderEvent>)> {
+    ) -> Result<(Hsi, tokio::sync::mpsc::Receiver<DownloaderEvent>)> {
         let mut downloader_config = config.downloader_config();
         if let Some(connections) = connections {
             downloader_config.max_concurrent = connections;
         }
 
         let queue_path = queue_state_path().context("unable to resolve shared queue path")?;
-        let mut queue = YuShi::with_config(
+        let mut queue = Hsi::with_config(
             downloader_config,
             max_tasks.unwrap_or(config.max_concurrent_tasks),
             queue_path,
@@ -62,7 +62,7 @@ impl ConfigStore {
     }
 }
 
-fn install_history_tracking(queue: &mut YuShi) {
+fn install_history_tracking(queue: &mut Hsi) {
     let queue_for_history = queue.clone();
     queue.set_on_complete(move |task_id, result| {
         let queue = queue_for_history.clone();

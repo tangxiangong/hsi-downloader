@@ -1,6 +1,6 @@
-# 驭时 (YuShi)
+# Hsi
 
-YuShi (驭时) 是一个用 Rust 构建的异步下载管理器，提供桌面 GUI 和命令行两种界面。
+Hsi 是一个用 Rust 构建的异步下载管理器，提供桌面 GUI 和命令行两种界面。
 
 ## 工作区结构
 
@@ -8,8 +8,8 @@ YuShi (驭时) 是一个用 Rust 构建的异步下载管理器，提供桌面 G
 | --------------- | ------------------------------------------------------------------------------------------------- |
 | **src-tauri/**  | Tauri v2 桌面应用，通过 `#[tauri::command]` 暴露核心 API，并经 Tauri 事件系统将实时进度推送到前端 |
 | **src-ui/**     | SolidJS + TailwindCSS + DaisyUI 前端，Vite 构建，Bun 包管理                                       |
-| **yushi-core/** | 共享下载引擎、队列管理、配置、历史记录与存储路径                                                  |
-| **yushi-cli/**  | 命令行接口（`clap`），默认启用 `ratatui` TUI                                                      |
+| **hsi-core/** | 共享下载引擎、队列管理、配置、历史记录与存储路径                                                  |
+| **hsi-cli/**  | 命令行接口（`clap`），默认启用 `ratatui` TUI                                                      |
 
 ## 核心能力
 
@@ -35,10 +35,10 @@ cargo tauri build
 cd src-ui && bun run dev
 
 # CLI
-cargo run -p yushi-cli -- --help
+cargo run -p hsi-cli -- --help
 
 # CLI + TUI（tui 为默认 feature）
-cargo run -p yushi-cli -- tui
+cargo run -p hsi-cli -- tui
 
 # 检查 / 测试
 cargo fmt --check
@@ -56,19 +56,19 @@ cargo test --workspace --all-features
                                          │
                                          ▼
                                   ┌──────────────┐
-                                  │  yushi-core  │
+                                  │  hsi-core    │
                                   │  下载引擎     │
                                   └──────────────┘
 ```
 
 - **前端 → 后端**：SolidJS 通过 `@tauri-apps/api` 的 `invoke()` 调用 `#[tauri::command]` 处理函数
-- **后端 → 前端**：`yushi-core` 产生 `DownloaderEvent`，Tauri 后端通过 `app_handle.emit()` 推送到前端
+- **后端 → 前端**：`hsi-core` 产生 `DownloaderEvent`，Tauri 后端通过 `app_handle.emit()` 推送到前端
 - **状态管理**：前端使用响应式 Store（`task-store`、`history-store`、`config-store`、`theme-store`）监听事件并同步
 - **主题**：DaisyUI 主题通过根元素 `data-theme` 属性切换，支持 亮色 / 暗色 / 跟随系统
 
 ## 共享数据位置
 
-配置、历史和队列文件统一存储在 `dirs::config_dir()/yushi/`（macOS/Linux 下为 `~/.config/yushi/`）：
+配置、历史和队列文件统一存储在 `dirs::config_dir()/hsi/`（macOS/Linux 下为 `~/.config/hsi/`）：
 
 | 文件           | 用途                                 |
 | -------------- | ------------------------------------ |

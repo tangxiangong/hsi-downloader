@@ -1,3 +1,8 @@
+use crate::tui::{
+    app::{AddTaskField, AddTaskState},
+    theme::ThemeColors,
+};
+use hsi_core::Priority;
 use ratatui::{
     Frame,
     layout::{Alignment, Constraint, Layout, Rect},
@@ -5,10 +10,6 @@ use ratatui::{
     text::{Line, Span},
     widgets::{Block, Borders, Clear, Paragraph},
 };
-use yushi_core::Priority;
-
-use crate::tui::app::{AddTaskField, AddTaskState};
-use crate::tui::theme::ThemeColors;
 
 /// Draw the "Add Task" dialog overlay.
 pub fn draw(f: &mut Frame, state: &AddTaskState, theme: &ThemeColors, area: Rect) {

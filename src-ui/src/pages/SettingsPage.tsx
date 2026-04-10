@@ -1,14 +1,22 @@
-import { type Component, type JSX, createMemo, createSignal } from "solid-js";
+import { type Component, type JSX, For, Match, Switch, createMemo, createSignal } from "solid-js";
 import { open } from "@tauri-apps/plugin-dialog";
 import { check } from "@tauri-apps/plugin-updater";
 import ThemeToggle from "../components/ThemeToggle";
 import { config, saveConfig } from "../stores/config-store";
+import DownloadIcon from "../icons/download.svg";
+import GlobeIcon from "../icons/globe.svg";
+import MagnetIcon from "../icons/magnet.svg";
+import PaletteIcon from "../icons/palette.svg";
+import HeartIcon from "../icons/heart.svg";
 
-interface SettingsSectionProps {
-  eyebrow: string;
-  title: string;
-  description: string;
-  children: JSX.Element;
+/* ── Types ───────────────────────────────────────────── */
+
+type TabId = "transfer" | "network" | "bt" | "appearance" | "about";
+
+interface Tab {
+  id: TabId;
+  label: string;
+  icon: Component<JSX.SvgSVGAttributes<SVGSVGElement>>;
 }
 
 interface SettingsFieldProps {
@@ -18,21 +26,20 @@ interface SettingsFieldProps {
   span?: "full" | "half";
 }
 
+/* ── Constants ───────────────────────────────────────── */
+
+const tabs: Tab[] = [
+  { id: "transfer", label: "下载", icon: DownloadIcon },
+  { id: "network", label: "网络", icon: GlobeIcon },
+  { id: "bt", label: "BT", icon: MagnetIcon },
+  { id: "appearance", label: "外观", icon: PaletteIcon },
+  { id: "about", label: "关于", icon: HeartIcon },
+];
+
 const inputClass =
   "input input-bordered h-11 w-full rounded-2xl border-base-300/80 bg-base-100/90 px-4 text-sm shadow-sm transition-colors focus:border-primary/50 focus:outline-none";
 
-const SettingsSection: Component<SettingsSectionProps> = (props) => (
-  <section class="rounded-[2rem] border border-base-300/70 bg-base-100/92 p-5 shadow-[0_18px_50px_-28px_rgba(15,23,42,0.45)] backdrop-blur">
-    <div class="flex flex-col gap-1 border-b border-base-300/70 pb-4">
-      <p class="text-[11px] font-semibold uppercase tracking-[0.22em] text-base-content/40">
-        {props.eyebrow}
-      </p>
-      <h3 class="text-lg font-semibold text-base-content">{props.title}</h3>
-      <p class="max-w-2xl text-sm leading-6 text-base-content/55">{props.description}</p>
-    </div>
-    <div class="mt-5 grid gap-4 md:grid-cols-2">{props.children}</div>
-  </section>
-);
+/* ── Sub-components ──────────────────────────────────── */
 
 const SettingsField: Component<SettingsFieldProps> = (props) => (
   <div
@@ -50,13 +57,17 @@ const SettingsField: Component<SettingsFieldProps> = (props) => (
   </div>
 );
 
+/* ── Main page ───────────────────────────────────────── */
+
 const SettingsPage: Component = () => {
+  const [activeTab, setActiveTab] = createSignal<TabId>("transfer");
   const [saving, setSaving] = createSignal(false);
   const [updateStatus, setUpdateStatus] = createSignal("");
 
   const chunkSizeMb = createMemo(() =>
     Math.max(1, Math.round(config.chunk_size / 1048576)),
   );
+
   const summaryCards = createMemo(() => [
     {
       label: "默认路径",
@@ -121,7 +132,8 @@ const SettingsPage: Component = () => {
 
   return (
     <div class="space-y-5">
-      <section class="relative overflow-hidden rounded-[2.2rem] border border-base-300/70 bg-[radial-gradient(circle_at_top_left,_color-mix(in_oklch,_var(--color-primary)_22%,_transparent),_transparent_38%),radial-gradient(circle_at_bottom_right,_color-mix(in_oklch,_var(--color-secondary)_18%,_transparent),_transparent_32%),linear-gradient(180deg,_var(--color-base-100),_color-mix(in_oklch,_var(--color-base-100)_76%,_var(--color-base-200)))] p-6 shadow-[0_24px_80px_-40px_rgba(15,23,42,0.45)]">
+      {/* ── Hero / Summary ──────────────────────────── */}
+      <section class="relative overflow-hidden rounded-[2.2rem] border border-base-300/70 bg-[radial-gradient(circle_at_top_left,_color-mix(in_oklch,_var(--color-primary)_22%,_transparent),_transparent_38%),radial-gradient(circle_at_bottom_right,_color-mix(in_oklch,_var(--color-secondary)_18%,_transparent),_transparent_32%),linear-gradient(180deg,_var(--color-base-100),_color-mix(in_oklch,_var(--color-base-100)_76%,_var(--color-base-200)))] p-6 shadow-[0_24px_80px_-40px_color-mix(in_oklch,_var(--color-base-content)_18%,_transparent)]">
         <div class="absolute inset-y-0 right-0 hidden w-56 translate-x-10 rounded-full bg-primary/10 blur-3xl md:block" />
         <div class="relative flex flex-col gap-5 lg:flex-row lg:items-start lg:justify-between">
           <div class="max-w-2xl">
@@ -155,240 +167,289 @@ const SettingsPage: Component = () => {
         </div>
       </section>
 
-      <div class="grid gap-5 xl:grid-cols-[minmax(0,1.45fr)_minmax(19rem,0.95fr)]">
-        <div class="space-y-5">
-          <SettingsSection
-            eyebrow="Transfer"
-            title="下载与并发"
-            description="定义默认保存路径、每个任务的连接数和队列同时执行规模。"
-          >
-            <SettingsField
-              label="默认下载路径"
-              hint="建议设置到稳定且空间充足的目录。修改后新任务会默认使用此位置。"
-              span="full"
+      {/* ── Sub-nav pill bar ────────────────────────── */}
+      <nav class="flex items-center gap-1 rounded-2xl border border-base-300/60 bg-base-100/80 p-1.5 backdrop-blur-sm">
+        <For each={tabs}>
+          {(tab) => (
+            <button
+              class={`flex items-center gap-1.5 rounded-xl px-4 py-2 text-sm font-medium transition-all duration-200 ${
+                activeTab() === tab.id
+                  ? "bg-primary/15 text-primary shadow-sm"
+                  : "text-base-content/55 hover:text-base-content hover:bg-base-200/80"
+              }`}
+              onClick={() => setActiveTab(tab.id)}
             >
-              <div class="flex flex-col gap-3 sm:flex-row">
-                <input
-                  type="text"
-                  class={`${inputClass} flex-1`}
-                  value={config.default_download_path}
-                  readOnly
-                />
-                <button class="btn btn-primary h-11 rounded-2xl px-5" onClick={pickDefaultDir}>
-                  浏览目录
-                </button>
-              </div>
-            </SettingsField>
+              <tab.icon class="w-3.5 h-3.5 opacity-70" />
+              {tab.label}
+            </button>
+          )}
+        </For>
+      </nav>
 
-            <SettingsField
-              label="每任务最大连接数"
-              hint="提高连接数能加快大文件下载，但也会增加服务器和网络压力。"
-            >
-              <input
-                type="number"
-                min="1"
-                max="32"
-                class={inputClass}
-                value={config.max_concurrent_downloads}
-                onChange={(event) =>
-                  handleSave(
-                    "max_concurrent_downloads",
-                    parseInt(event.currentTarget.value, 10),
-                  )}
-              />
-            </SettingsField>
+      {/* ── Tab content ─────────────────────────────── */}
+      <Switch>
+        {/* ---- Transfer ---- */}
+        <Match when={activeTab() === "transfer"}>
+          <section class="settings-panel rounded-[2rem] border border-base-300/70 bg-base-100/92 p-5 shadow-[0_18px_50px_-28px_color-mix(in_oklch,_var(--color-base-content)_18%,_transparent)] backdrop-blur">
+            <div class="flex flex-col gap-1 border-b border-base-300/70 pb-4">
+              <p class="text-[11px] font-semibold uppercase tracking-[0.22em] text-base-content/40">
+                Transfer
+              </p>
+              <h3 class="text-lg font-semibold text-base-content">下载与并发</h3>
+              <p class="max-w-2xl text-sm leading-6 text-base-content/55">
+                定义默认保存路径、每个任务的连接数和队列同时执行规模。
+              </p>
+            </div>
+            <div class="mt-5 grid gap-4 md:grid-cols-2">
+              <SettingsField
+                label="默认下载路径"
+                hint="建议设置到稳定且空间充足的目录。修改后新任务会默认使用此位置。"
+                span="full"
+              >
+                <div class="flex flex-col gap-3 sm:flex-row">
+                  <input
+                    type="text"
+                    class={`${inputClass} flex-1`}
+                    value={config.default_download_path}
+                    readOnly
+                  />
+                  <button class="btn btn-primary h-11 rounded-2xl px-5" onClick={pickDefaultDir}>
+                    浏览目录
+                  </button>
+                </div>
+              </SettingsField>
 
-            <SettingsField
-              label="最大同时任务数"
-              hint="控制队列一次并发跑几个任务，适合按带宽和磁盘吞吐来平衡。"
-            >
-              <input
-                type="number"
-                min="1"
-                max="16"
-                class={inputClass}
-                value={config.max_concurrent_tasks}
-                onChange={(event) =>
-                  handleSave(
-                    "max_concurrent_tasks",
-                    parseInt(event.currentTarget.value, 10),
-                  )}
-              />
-            </SettingsField>
-          </SettingsSection>
-
-          <SettingsSection
-            eyebrow="Network"
-            title="网络与请求参数"
-            description="调整代理、请求超时、分块大小和 User-Agent，优化不同网络环境下的表现。"
-          >
-            <SettingsField
-              label="代理地址"
-              hint="支持例如 socks5://127.0.0.1:1080。留空则直接联网。"
-              span="full"
-            >
-              <input
-                type="text"
-                class={inputClass}
-                placeholder="socks5://127.0.0.1:1080"
-                value={config.proxy ?? ""}
-                onChange={(event) => handleSave("proxy", event.currentTarget.value || null)}
-              />
-            </SettingsField>
-
-            <SettingsField
-              label="User Agent"
-              hint="某些站点会根据 User Agent 返回不同资源或进行限制。"
-              span="full"
-            >
-              <input
-                type="text"
-                class={inputClass}
-                value={config.user_agent}
-                onChange={(event) => handleSave("user_agent", event.currentTarget.value)}
-              />
-            </SettingsField>
-
-            <SettingsField
-              label="请求超时"
-              hint="单位为秒。网络不稳定时可以适当调高。"
-            >
-              <div class="relative">
-                <input
-                  type="number"
-                  min="5"
-                  class={`${inputClass} pr-14`}
-                  value={config.timeout}
-                  onChange={(event) =>
-                    handleSave("timeout", parseInt(event.currentTarget.value, 10))}
-                />
-                <span class="pointer-events-none absolute inset-y-0 right-4 flex items-center text-xs font-medium text-base-content/45">
-                  秒
-                </span>
-              </div>
-            </SettingsField>
-
-            <SettingsField
-              label="分块大小"
-              hint="较大的分块适合高速稳定网络，较小的分块更利于弱网重试。"
-            >
-              <div class="relative">
+              <SettingsField
+                label="每任务最大连接数"
+                hint="提高连接数能加快大文件下载，但也会增加服务器和网络压力。"
+              >
                 <input
                   type="number"
                   min="1"
-                  class={`${inputClass} pr-14`}
-                  value={chunkSizeMb()}
+                  max="32"
+                  class={inputClass}
+                  value={config.max_concurrent_downloads}
                   onChange={(event) =>
                     handleSave(
-                      "chunk_size",
-                      parseInt(event.currentTarget.value, 10) * 1048576,
+                      "max_concurrent_downloads",
+                      parseInt(event.currentTarget.value, 10),
                     )}
                 />
-                <span class="pointer-events-none absolute inset-y-0 right-4 flex items-center text-xs font-medium text-base-content/45">
-                  MB
-                </span>
-              </div>
-            </SettingsField>
-          </SettingsSection>
+              </SettingsField>
 
-          <SettingsSection
-            eyebrow="BitTorrent"
-            title="种子下载策略"
-            description="控制 DHT、做种、上传和监听端口，让 BT 任务行为更符合你的网络环境。"
-          >
-            <SettingsField
-              label="DHT 网络"
-              hint="开启后能更容易发现 peers。公网环境建议开启，受限网络可按需关闭。"
-              span="full"
-            >
-              <label class="flex items-center justify-between rounded-2xl border border-base-300/70 bg-base-100/85 px-4 py-3">
-                <div>
-                  <p class="text-sm font-medium text-base-content">启用 DHT</p>
-                  <p class="mt-1 text-xs text-base-content/50">
-                    提升节点发现能力和磁力链接启动速度
-                  </p>
-                </div>
-                <input
-                  type="checkbox"
-                  class="toggle toggle-md"
-                  checked={config.bt.dht_enabled}
-                  onChange={(event) =>
-                    handleSave("bt", {
-                      ...config.bt,
-                      dht_enabled: event.currentTarget.checked,
-                    })}
-                />
-              </label>
-            </SettingsField>
-
-            <SettingsField
-              label="上传限速"
-              hint="单位为 KB/s。留空表示不限速。"
-            >
-              <div class="relative">
+              <SettingsField
+                label="最大同时任务数"
+                hint="控制队列一次并发跑几个任务，适合按带宽和磁盘吞吐来平衡。"
+              >
                 <input
                   type="number"
-                  class={`${inputClass} pr-16`}
-                  placeholder="不限"
-                  value={config.bt.upload_limit ? config.bt.upload_limit / 1024 : ""}
+                  min="1"
+                  max="16"
+                  class={inputClass}
+                  value={config.max_concurrent_tasks}
+                  onChange={(event) =>
+                    handleSave(
+                      "max_concurrent_tasks",
+                      parseInt(event.currentTarget.value, 10),
+                    )}
+                />
+              </SettingsField>
+            </div>
+          </section>
+        </Match>
+
+        {/* ---- Network ---- */}
+        <Match when={activeTab() === "network"}>
+          <section class="settings-panel rounded-[2rem] border border-base-300/70 bg-base-100/92 p-5 shadow-[0_18px_50px_-28px_color-mix(in_oklch,_var(--color-base-content)_18%,_transparent)] backdrop-blur">
+            <div class="flex flex-col gap-1 border-b border-base-300/70 pb-4">
+              <p class="text-[11px] font-semibold uppercase tracking-[0.22em] text-base-content/40">
+                Network
+              </p>
+              <h3 class="text-lg font-semibold text-base-content">网络与请求参数</h3>
+              <p class="max-w-2xl text-sm leading-6 text-base-content/55">
+                调整代理、请求超时、分块大小和 User-Agent，优化不同网络环境下的表现。
+              </p>
+            </div>
+            <div class="mt-5 grid gap-4 md:grid-cols-2">
+              <SettingsField
+                label="代理地址"
+                hint="支持例如 socks5://127.0.0.1:1080。留空则直接联网。"
+                span="full"
+              >
+                <input
+                  type="text"
+                  class={inputClass}
+                  placeholder="socks5://127.0.0.1:1080"
+                  value={config.proxy ?? ""}
+                  onChange={(event) => handleSave("proxy", event.currentTarget.value || null)}
+                />
+              </SettingsField>
+
+              <SettingsField
+                label="User Agent"
+                hint="某些站点会根据 User Agent 返回不同资源或进行限制。"
+                span="full"
+              >
+                <input
+                  type="text"
+                  class={inputClass}
+                  value={config.user_agent}
+                  onChange={(event) => handleSave("user_agent", event.currentTarget.value)}
+                />
+              </SettingsField>
+
+              <SettingsField
+                label="请求超时"
+                hint="单位为秒。网络不稳定时可以适当调高。"
+              >
+                <div class="relative">
+                  <input
+                    type="number"
+                    min="5"
+                    class={`${inputClass} pr-14`}
+                    value={config.timeout}
+                    onChange={(event) =>
+                      handleSave("timeout", parseInt(event.currentTarget.value, 10))}
+                  />
+                  <span class="pointer-events-none absolute inset-y-0 right-4 flex items-center text-xs font-medium text-base-content/45">
+                    秒
+                  </span>
+                </div>
+              </SettingsField>
+
+              <SettingsField
+                label="分块大小"
+                hint="较大的分块适合高速稳定网络，较小的分块更利于弱网重试。"
+              >
+                <div class="relative">
+                  <input
+                    type="number"
+                    min="1"
+                    class={`${inputClass} pr-14`}
+                    value={chunkSizeMb()}
+                    onChange={(event) =>
+                      handleSave(
+                        "chunk_size",
+                        parseInt(event.currentTarget.value, 10) * 1048576,
+                      )}
+                  />
+                  <span class="pointer-events-none absolute inset-y-0 right-4 flex items-center text-xs font-medium text-base-content/45">
+                    MB
+                  </span>
+                </div>
+              </SettingsField>
+            </div>
+          </section>
+        </Match>
+
+        {/* ---- BitTorrent ---- */}
+        <Match when={activeTab() === "bt"}>
+          <section class="settings-panel rounded-[2rem] border border-base-300/70 bg-base-100/92 p-5 shadow-[0_18px_50px_-28px_color-mix(in_oklch,_var(--color-base-content)_18%,_transparent)] backdrop-blur">
+            <div class="flex flex-col gap-1 border-b border-base-300/70 pb-4">
+              <p class="text-[11px] font-semibold uppercase tracking-[0.22em] text-base-content/40">
+                BitTorrent
+              </p>
+              <h3 class="text-lg font-semibold text-base-content">种子下载策略</h3>
+              <p class="max-w-2xl text-sm leading-6 text-base-content/55">
+                控制 DHT、做种、上传和监听端口，让 BT 任务行为更符合你的网络环境。
+              </p>
+            </div>
+            <div class="mt-5 grid gap-4 md:grid-cols-2">
+              <SettingsField
+                label="DHT 网络"
+                hint="开启后能更容易发现 peers。公网环境建议开启，受限网络可按需关闭。"
+                span="full"
+              >
+                <label class="flex items-center justify-between rounded-2xl border border-base-300/70 bg-base-100/85 px-4 py-3">
+                  <div>
+                    <p class="text-sm font-medium text-base-content">启用 DHT</p>
+                    <p class="mt-1 text-xs text-base-content/50">
+                      提升节点发现能力和磁力链接启动速度
+                    </p>
+                  </div>
+                  <input
+                    type="checkbox"
+                    class="toggle toggle-md"
+                    checked={config.bt.dht_enabled}
+                    onChange={(event) =>
+                      handleSave("bt", {
+                        ...config.bt,
+                        dht_enabled: event.currentTarget.checked,
+                      })}
+                  />
+                </label>
+              </SettingsField>
+
+              <SettingsField
+                label="上传限速"
+                hint="单位为 KB/s。留空表示不限速。"
+              >
+                <div class="relative">
+                  <input
+                    type="number"
+                    class={`${inputClass} pr-16`}
+                    placeholder="不限"
+                    value={config.bt.upload_limit ? config.bt.upload_limit / 1024 : ""}
+                    onChange={(event) => {
+                      const value = event.currentTarget.value;
+                      handleSave("bt", {
+                        ...config.bt,
+                        upload_limit: value ? parseInt(value, 10) * 1024 : null,
+                      });
+                    }}
+                  />
+                  <span class="pointer-events-none absolute inset-y-0 right-4 flex items-center text-xs font-medium text-base-content/45">
+                    KB/s
+                  </span>
+                </div>
+              </SettingsField>
+
+              <SettingsField
+                label="做种比例"
+                hint="例如 2.0。留空表示下载完成后不继续做种。"
+              >
+                <input
+                  type="number"
+                  step="0.1"
+                  class={inputClass}
+                  placeholder="不做种"
+                  value={config.bt.seed_ratio ?? ""}
                   onChange={(event) => {
                     const value = event.currentTarget.value;
                     handleSave("bt", {
                       ...config.bt,
-                      upload_limit: value ? parseInt(value, 10) * 1024 : null,
+                      seed_ratio: value ? parseFloat(value) : null,
                     });
                   }}
                 />
-                <span class="pointer-events-none absolute inset-y-0 right-4 flex items-center text-xs font-medium text-base-content/45">
-                  KB/s
-                </span>
-              </div>
-            </SettingsField>
+              </SettingsField>
 
-            <SettingsField
-              label="做种比例"
-              hint="例如 2.0。留空表示下载完成后不继续做种。"
-            >
-              <input
-                type="number"
-                step="0.1"
-                class={inputClass}
-                placeholder="不做种"
-                value={config.bt.seed_ratio ?? ""}
-                onChange={(event) => {
-                  const value = event.currentTarget.value;
-                  handleSave("bt", {
-                    ...config.bt,
-                    seed_ratio: value ? parseFloat(value) : null,
-                  });
-                }}
-              />
-            </SettingsField>
+              <SettingsField
+                label="监听端口"
+                hint="留空则随机。固定端口更利于防火墙和端口映射配置。"
+                span="full"
+              >
+                <input
+                  type="number"
+                  class={inputClass}
+                  placeholder="随机"
+                  value={config.bt.listen_port ?? ""}
+                  onChange={(event) => {
+                    const value = event.currentTarget.value;
+                    handleSave("bt", {
+                      ...config.bt,
+                      listen_port: value ? parseInt(value, 10) : null,
+                    });
+                  }}
+                />
+              </SettingsField>
+            </div>
+          </section>
+        </Match>
 
-            <SettingsField
-              label="监听端口"
-              hint="留空则随机。固定端口更利于防火墙和端口映射配置。"
-              span="full"
-            >
-              <input
-                type="number"
-                class={inputClass}
-                placeholder="随机"
-                value={config.bt.listen_port ?? ""}
-                onChange={(event) => {
-                  const value = event.currentTarget.value;
-                  handleSave("bt", {
-                    ...config.bt,
-                    listen_port: value ? parseInt(value, 10) : null,
-                  });
-                }}
-              />
-            </SettingsField>
-          </SettingsSection>
-        </div>
-
-        <div class="space-y-5">
-          <section class="rounded-[2rem] border border-base-300/70 bg-base-100/92 p-5 shadow-[0_18px_50px_-28px_rgba(15,23,42,0.45)] backdrop-blur">
+        {/* ---- Appearance ---- */}
+        <Match when={activeTab() === "appearance"}>
+          <section class="settings-panel rounded-[2rem] border border-base-300/70 bg-base-100/92 p-5 shadow-[0_18px_50px_-28px_color-mix(in_oklch,_var(--color-base-content)_18%,_transparent)] backdrop-blur">
             <div class="border-b border-base-300/70 pb-4">
               <p class="text-[11px] font-semibold uppercase tracking-[0.22em] text-base-content/40">
                 Appearance
@@ -412,8 +473,11 @@ const SettingsPage: Component = () => {
               </div>
             </div>
           </section>
+        </Match>
 
-          <section class="rounded-[2rem] border border-base-300/70 bg-base-100/92 p-5 shadow-[0_18px_50px_-28px_rgba(15,23,42,0.45)] backdrop-blur">
+        {/* ---- About ---- */}
+        <Match when={activeTab() === "about"}>
+          <section class="settings-panel rounded-[2rem] border border-base-300/70 bg-base-100/92 p-5 shadow-[0_18px_50px_-28px_color-mix(in_oklch,_var(--color-base-content)_18%,_transparent)] backdrop-blur">
             <div class="border-b border-base-300/70 pb-4">
               <p class="text-[11px] font-semibold uppercase tracking-[0.22em] text-base-content/40">
                 Release
@@ -426,7 +490,7 @@ const SettingsPage: Component = () => {
 
             <div class="mt-5 space-y-4">
               <div class="rounded-[1.5rem] border border-base-300/70 bg-base-200/60 p-4">
-                <p class="text-sm font-medium text-base-content">驭时 (YuShi) v0.1.0</p>
+                <p class="text-sm font-medium text-base-content">Hsi v0.1.0</p>
                 <p class="mt-1 text-xs leading-5 text-base-content/50">
                   当前桌面客户端版本。建议在网络稳定时执行更新检查。
                 </p>
@@ -446,8 +510,8 @@ const SettingsPage: Component = () => {
               </div>
             </div>
           </section>
-        </div>
-      </div>
+        </Match>
+      </Switch>
     </div>
   );
 };

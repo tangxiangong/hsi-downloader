@@ -227,7 +227,7 @@ mod tests {
             .duration_since(UNIX_EPOCH)
             .unwrap_or_default()
             .as_nanos();
-        std::env::temp_dir().join(format!("yushi-core-{name}-{nonce}.json"))
+        std::env::temp_dir().join(format!("hsi-core-{name}-{nonce}.json"))
     }
 
     fn sample_task(id: &str, path: &str) -> CompletedTask {
@@ -288,7 +288,7 @@ mod tests {
     #[tokio::test]
     async fn remove_entry_and_file_from_file_deletes_artifact() {
         let path = temp_file("history-delete-file");
-        let artifact = std::env::temp_dir().join("yushi-history-delete-artifact.bin");
+        let artifact = std::env::temp_dir().join("hsi-history-delete-artifact.bin");
         fs_err::tokio::write(&artifact, b"payload")
             .await
             .expect("write artifact");

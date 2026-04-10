@@ -5,7 +5,7 @@ use crate::{
 };
 use anyhow::Result;
 use console::style;
-use yushi_core::{AppConfig, parse_speed_limit};
+use hsi_core::{AppConfig, parse_speed_limit};
 
 pub async fn execute(args: ConfigArgs) -> Result<()> {
     match args.command {

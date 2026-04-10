@@ -31,7 +31,7 @@ pub fn draw(f: &mut Frame, app: &App, theme: &ThemeColors, area: Rect) {
     .split(inner);
 
     // Logo
-    let logo = Paragraph::new(Line::from("驭时"))
+    let logo = Paragraph::new(Line::from("Hsi"))
         .style(
             Style::default()
                 .fg(theme.primary)

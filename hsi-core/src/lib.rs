@@ -1,4 +1,4 @@
-//! YuShi - 高性能异步下载库
+//! Hsi - 高性能异步下载库
 //!
 //! 提供统一的下载和队列管理功能，支持断点续传、并发下载等特性。
 
@@ -17,7 +17,7 @@ pub use error::*;
 // 重新导出公共 API
 pub use bt::{BtEngine, detect_source, spawn_bt_progress_poller};
 pub use config::{AppConfig, BtConfig};
-pub use downloader::YuShi;
+pub use downloader::Hsi;
 pub use history::{CompletedTask, DownloadHistory};
 pub use storage::{
     config_path, download_state_path, history_path, migrate_download_state_file, queue_state_path,

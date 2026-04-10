@@ -1,6 +1,6 @@
 [workspace]
 resolver = "3"
-members = ["src-tauri", "yushi-cli", "yushi-core"]
+members = ["hsi-cli", "hsi-core", "src-tauri"]
 
 [workspace.package]
 authors = ["tangxiangong <tangxiangong@gmail.com>"]
@@ -14,6 +14,7 @@ dirs = "6"
 fs-err = { version = "3.2", features = ["debug_tokio", "tokio"] }
 futures = "0.3"
 hex = "0.4"
+hsi-core = { path = "hsi-core" }
 librqbit = "8"
 md-5 = "0.11"
 reqwest = { version = "0.13", features = ["stream", "socks"] }
@@ -23,7 +24,6 @@ sha2 = "0.11"
 thiserror = "2"
 tokio = { version = "1", features = ["fs", "rt", "rt-multi-thread", "signal"] }
 uuid = { version = "1", features = ["v4"] }
-yushi-core = { path = "yushi-core" }
 
 [profile.dev]
 opt-level = 1

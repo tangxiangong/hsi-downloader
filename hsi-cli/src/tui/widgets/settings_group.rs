@@ -1,3 +1,8 @@
+use crate::tui::{
+    app::{App, InputMode, SETTINGS_GROUPS, SettingField},
+    theme::ThemeColors,
+};
+use hsi_core::config::AppTheme;
 use ratatui::{
     Frame,
     layout::{Constraint, Layout, Rect},
@@ -5,10 +10,6 @@ use ratatui::{
     text::{Line, Span},
     widgets::{Block, Borders, Paragraph},
 };
-use yushi_core::config::AppTheme;
-
-use crate::tui::app::{App, InputMode, SETTINGS_GROUPS, SettingField};
-use crate::tui::theme::ThemeColors;
 
 /// Draw all settings groups with card-like blocks, plus an About card at the bottom.
 pub fn draw(f: &mut Frame, app: &App, theme: &ThemeColors, area: Rect) {
@@ -52,11 +53,11 @@ pub fn draw(f: &mut Frame, app: &App, theme: &ThemeColors, area: Rect) {
 
     let about_text = Paragraph::new(Line::from(vec![
         Span::styled(
-            "YuShi v0.1.0  ",
+            "Hsi v0.1.0  ",
             Style::default().fg(theme.text).add_modifier(Modifier::BOLD),
         ),
         Span::styled(
-            "驭时 - 异步下载管理器",
+            "Hsi - 异步下载管理器",
             Style::default().fg(theme.text_secondary),
         ),
     ]))

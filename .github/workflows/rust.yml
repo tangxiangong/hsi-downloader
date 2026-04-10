@@ -64,4 +64,4 @@ jobs:
         run: cargo test --workspace --all-features --locked --verbose
 
       - name: Test CLI without TUI
-        run: cargo test -p yushi-cli --no-default-features --locked --verbose
+        run: cargo test -p hsi-cli --no-default-features --locked --verbose

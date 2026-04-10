@@ -77,7 +77,7 @@ const TrayApp: Component = () => {
           <div class="flex items-start justify-between gap-3">
             <div>
               <p class="text-xs font-semibold uppercase tracking-[0.28em] text-base-content/40">
-                YuShi Tray
+                Hsi Tray
               </p>
               <h1 class="mt-1 text-lg font-semibold">下载概览</h1>
               <p class="mt-1 text-xs text-base-content/55">

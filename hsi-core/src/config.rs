@@ -102,7 +102,7 @@ impl Default for AppConfig {
             max_concurrent_tasks: 2,
             chunk_size: 10 * 1024 * 1024,
             timeout: 30,
-            user_agent: "YuShi/1.0".to_string(),
+            user_agent: "Hsi/1.0".to_string(),
             proxy: None,
             speed_limit: None,
             theme: AppTheme::default(),
@@ -229,7 +229,7 @@ mod tests {
             .duration_since(UNIX_EPOCH)
             .unwrap_or_default()
             .as_nanos();
-        std::env::temp_dir().join(format!("yushi-core-{name}-{nonce}.json"))
+        std::env::temp_dir().join(format!("hsi-core-{name}-{nonce}.json"))
     }
 
     #[tokio::test]

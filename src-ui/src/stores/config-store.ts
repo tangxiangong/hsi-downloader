@@ -9,7 +9,7 @@ const [config, setConfig] = createStore<AppConfig>({
   max_concurrent_tasks: 2,
   chunk_size: 10485760,
   timeout: 30,
-  user_agent: "YuShi/1.0",
+  user_agent: "Hsi/1.0",
   proxy: null,
   speed_limit: null,
   theme: "system",

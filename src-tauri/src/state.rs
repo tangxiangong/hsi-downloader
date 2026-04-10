@@ -1,13 +1,13 @@
 use anyhow::Result;
-use std::path::PathBuf;
-use tokio::sync::{RwLock, mpsc};
-use yushi_core::{
-    AppConfig, CompletedTask, DownloadHistory, DownloaderEvent, TaskStatus, YuShi, config_path,
+use hsi_core::{
+    AppConfig, CompletedTask, DownloadHistory, DownloaderEvent, Hsi, TaskStatus, config_path,
     history_path, queue_state_path,
 };
+use std::path::PathBuf;
+use tokio::sync::{RwLock, mpsc};
 
 pub struct AppState {
-    pub queue: YuShi,
+    pub queue: Hsi,
     pub config: RwLock<AppConfig>,
     pub history: RwLock<DownloadHistory>,
     pub config_path: PathBuf,
@@ -24,7 +24,7 @@ impl AppState {
         config.save(&cfg_path).await?;
         let history = DownloadHistory::load(&hist_path).await?;
 
-        let (mut queue, event_rx) = YuShi::with_config(
+        let (mut queue, event_rx) = Hsi::with_config(
             config.downloader_config(),
             config.max_concurrent_tasks,
             q_path,

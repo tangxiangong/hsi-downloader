@@ -24,8 +24,11 @@ pub fn setup_tray(app: &AppHandle) -> tauri::Result<()> {
     let quit = MenuItemBuilder::with_id("quit", "退出").build(app)?;
     let menu = MenuBuilder::new(app).items(&[&open_main, &quit]).build()?;
 
+    let icon = tauri::image::Image::from_bytes(include_bytes!("../icons/32x32.png"))?;
+
     TrayIconBuilder::with_id(TRAY_ICON_ID)
-        .tooltip("驭时 (YuShi)")
+        .icon(icon)
+        .tooltip("Hsi")
         .menu(&menu)
         .show_menu_on_left_click(false)
         .on_menu_event(|app: &AppHandle, event| match event.id().as_ref() {
@@ -99,11 +102,10 @@ fn toggle_tray_window(app: &AppHandle) {
     #[cfg(target_os = "macos")]
     {
         if app.is_popover_shown() {
-            let _ = app.hide_popover();
+            app.hide_popover();
         } else {
-            let _ = app.show_popover();
+            app.show_popover();
         }
-        return;
     }
 
     #[cfg(any(target_os = "linux", windows))]

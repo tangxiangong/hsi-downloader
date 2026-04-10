@@ -7,10 +7,10 @@ function applyTheme(t: AppTheme) {
   let resolved: string;
   if (t === "system") {
     resolved = window.matchMedia("(prefers-color-scheme: dark)").matches
-      ? "yushi-dark"
-      : "yushi-light";
+      ? "hsi-dark"
+      : "hsi-light";
   } else {
-    resolved = t === "dark" ? "yushi-dark" : "yushi-light";
+    resolved = t === "dark" ? "hsi-dark" : "hsi-light";
   }
   document.documentElement.setAttribute("data-theme", resolved);
 }

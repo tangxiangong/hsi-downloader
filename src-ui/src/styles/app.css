@@ -2,31 +2,42 @@
 @plugin "daisyui";
 
 @plugin "daisyui/theme" {
-  name: "yushi-dark";
+  name: "hsi-dark";
   default: false;
   prefersdark: true;
   color-scheme: dark;
 
-  --color-base-100: oklch(18% 0.02 270);
-  --color-base-200: oklch(14% 0.02 270);
-  --color-base-300: oklch(22% 0.025 270);
-  --color-base-content: oklch(90% 0.01 270);
-  --color-primary: oklch(60% 0.25 15);
-  --color-primary-content: oklch(98% 0.01 15);
-  --color-secondary: oklch(65% 0.2 250);
-  --color-secondary-content: oklch(98% 0.01 250);
-  --color-accent: oklch(70% 0.2 50);
-  --color-accent-content: oklch(15% 0.02 50);
-  --color-neutral: oklch(25% 0.02 270);
-  --color-neutral-content: oklch(85% 0.01 270);
-  --color-info: oklch(70% 0.15 230);
-  --color-info-content: oklch(98% 0.01 230);
-  --color-success: oklch(65% 0.2 145);
-  --color-success-content: oklch(98% 0.01 145);
-  --color-warning: oklch(80% 0.18 85);
-  --color-warning-content: oklch(20% 0.04 85);
-  --color-error: oklch(60% 0.25 25);
-  --color-error-content: oklch(98% 0.01 25);
+  /* Deep indigo night sky — drawn from bg.png's moon-lit backdrop */
+  --color-base-100: oklch(22% 0.03 275);
+  --color-base-200: oklch(18% 0.035 275);
+  --color-base-300: oklch(28% 0.03 270);
+  --color-base-content: oklch(92% 0.015 70);
+
+  /* Coral/sakura primary — cherry blossom pink from the illustration */
+  --color-primary: oklch(72% 0.12 18);
+  --color-primary-content: oklch(20% 0.03 18);
+
+  /* Muted lavender secondary — night sky undertone */
+  --color-secondary: oklch(62% 0.07 280);
+  --color-secondary-content: oklch(95% 0.01 280);
+
+  /* Golden lantern accent */
+  --color-accent: oklch(76% 0.12 80);
+  --color-accent-content: oklch(20% 0.03 80);
+
+  /* Deep indigo neutral */
+  --color-neutral: oklch(30% 0.025 275);
+  --color-neutral-content: oklch(88% 0.015 70);
+
+  /* Semantic */
+  --color-info: oklch(70% 0.1 240);
+  --color-info-content: oklch(98% 0.005 240);
+  --color-success: oklch(70% 0.14 155);
+  --color-success-content: oklch(98% 0.005 155);
+  --color-warning: oklch(78% 0.12 80);
+  --color-warning-content: oklch(22% 0.04 80);
+  --color-error: oklch(65% 0.17 20);
+  --color-error-content: oklch(98% 0.005 20);
 
   --radius-selector: 0.5rem;
   --radius-field: 0.5rem;
@@ -39,31 +50,42 @@
 }
 
 @plugin "daisyui/theme" {
-  name: "yushi-light";
+  name: "hsi-light";
   default: true;
   prefersdark: false;
   color-scheme: light;
 
-  --color-base-100: oklch(99% 0.005 270);
-  --color-base-200: oklch(96% 0.008 270);
-  --color-base-300: oklch(92% 0.01 270);
-  --color-base-content: oklch(25% 0.02 270);
-  --color-primary: oklch(55% 0.25 15);
-  --color-primary-content: oklch(98% 0.01 15);
-  --color-secondary: oklch(55% 0.2 250);
-  --color-secondary-content: oklch(98% 0.01 250);
-  --color-accent: oklch(65% 0.2 50);
-  --color-accent-content: oklch(15% 0.02 50);
-  --color-neutral: oklch(40% 0.02 270);
-  --color-neutral-content: oklch(98% 0.01 270);
-  --color-info: oklch(60% 0.15 230);
-  --color-info-content: oklch(98% 0.01 230);
-  --color-success: oklch(55% 0.2 145);
-  --color-success-content: oklch(98% 0.01 145);
-  --color-warning: oklch(75% 0.18 85);
-  --color-warning-content: oklch(20% 0.04 85);
-  --color-error: oklch(55% 0.25 25);
-  --color-error-content: oklch(98% 0.01 25);
+  /* Warm cream with a whisper of pink — cherry blossom petal glow */
+  --color-base-100: oklch(98% 0.01 55);
+  --color-base-200: oklch(95.5% 0.015 50);
+  --color-base-300: oklch(90% 0.025 50);
+  --color-base-content: oklch(25% 0.03 40);
+
+  /* Soft coral primary — sakura petal, not alarm red */
+  --color-primary: oklch(64% 0.11 22);
+  --color-primary-content: oklch(99% 0.005 22);
+
+  /* Dusty rose secondary */
+  --color-secondary: oklch(70% 0.07 15);
+  --color-secondary-content: oklch(28% 0.02 15);
+
+  /* Warm gold accent — lantern glow */
+  --color-accent: oklch(70% 0.11 75);
+  --color-accent-content: oklch(20% 0.03 75);
+
+  /* Warm brown neutral */
+  --color-neutral: oklch(35% 0.03 45);
+  --color-neutral-content: oklch(96% 0.01 55);
+
+  /* Semantic */
+  --color-info: oklch(60% 0.1 240);
+  --color-info-content: oklch(98% 0.005 240);
+  --color-success: oklch(62% 0.14 155);
+  --color-success-content: oklch(98% 0.005 155);
+  --color-warning: oklch(74% 0.12 80);
+  --color-warning-content: oklch(22% 0.04 80);
+  --color-error: oklch(58% 0.16 20);
+  --color-error-content: oklch(98% 0.005 20);
 
   --radius-selector: 0.5rem;
   --radius-field: 0.5rem;
@@ -75,38 +97,73 @@
   --noise: 0;
 }
 
-/* Progress bar gradients */
+/* Main content area — bg.png as atmospheric decoration */
+.main-bg {
+  position: relative;
+}
+.main-bg::before {
+  content: "";
+  position: fixed;
+  bottom: -5%;
+  right: -5%;
+  width: 62%;
+  aspect-ratio: 1;
+  background: url("/bg.png") center / contain no-repeat;
+  opacity: 0.06;
+  pointer-events: none;
+  z-index: 0;
+}
+[data-theme="hsi-dark"] .main-bg::before {
+  opacity: 0.1;
+}
+
+/* Progress bar gradients — coral → gold */
 .progress-downloading::-webkit-progress-value {
-  background: linear-gradient(90deg, oklch(60% 0.25 15), oklch(70% 0.2 50));
+  background: linear-gradient(90deg, oklch(65% 0.14 18), oklch(74% 0.12 75));
   border-radius: 999px;
 }
 .progress-downloading::-moz-progress-bar {
-  background: linear-gradient(90deg, oklch(60% 0.25 15), oklch(70% 0.2 50));
+  background: linear-gradient(90deg, oklch(65% 0.14 18), oklch(74% 0.12 75));
   border-radius: 999px;
 }
 .progress-completed::-webkit-progress-value {
-  background: oklch(65% 0.2 145);
+  background: oklch(66% 0.14 155);
   border-radius: 999px;
 }
 .progress-completed::-moz-progress-bar {
-  background: oklch(65% 0.2 145);
+  background: oklch(66% 0.14 155);
   border-radius: 999px;
 }
 .progress-paused::-webkit-progress-value {
-  background: oklch(80% 0.18 85);
+  background: oklch(76% 0.12 80);
   border-radius: 999px;
 }
 .progress-paused::-moz-progress-bar {
-  background: oklch(80% 0.18 85);
+  background: oklch(76% 0.12 80);
   border-radius: 999px;
 }
 .progress-failed::-webkit-progress-value {
-  background: oklch(60% 0.25 25);
+  background: oklch(60% 0.17 20);
   border-radius: 999px;
 }
 .progress-failed::-moz-progress-bar {
-  background: oklch(60% 0.25 25);
+  background: oklch(60% 0.17 20);
   border-radius: 999px;
+}
+
+/* Settings panel fade-in */
+.settings-panel {
+  animation: settingsFadeIn 0.25s ease-out;
+}
+@keyframes settingsFadeIn {
+  from {
+    opacity: 0;
+    transform: translateY(6px);
+  }
+  to {
+    opacity: 1;
+    transform: translateY(0);
+  }
 }
 
 /* Icon button */
