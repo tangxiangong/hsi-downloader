@@ -1,0 +1,11 @@
+{
+  "identifier": "macos-tray",
+  "description": "macOS-only tray popover permissions",
+  "windows": ["main", "tray"],
+  "platforms": ["macOS"],
+  "permissions": [
+    "nspopover:allow-show-popover",
+    "nspopover:allow-hide-popover",
+    "nspopover:allow-is-popover-shown"
+  ]
+}

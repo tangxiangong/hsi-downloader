@@ -5,9 +5,6 @@
   "permissions": [
     "core:default",
     "dialog:default",
-    "updater:default",
-    "nspopover:allow-show-popover",
-    "nspopover:allow-hide-popover",
-    "nspopover:allow-is-popover-shown"
+    "updater:default"
   ]
 }
