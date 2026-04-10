@@ -38,7 +38,7 @@ impl ProgressManager {
             );
             pb
         };
-        pb.set_message(format!("📥 {}", &task_id[..8]));
+        pb.set_message(format!("📥 {}", &short_task_id(&task_id)));
 
         let mut bars = self.bars.write().await;
         bars.insert(task_id, pb);
@@ -49,7 +49,11 @@ impl ProgressManager {
         if let Some(pb) = bars.get(task_id) {
             pb.set_position(downloaded);
             let speed_mb = speed as f64 / 1024.0 / 1024.0;
-            pb.set_message(format!("📥 {} @ {:.2} MB/s", &task_id[..8], speed_mb));
+            pb.set_message(format!(
+                "📥 {} @ {:.2} MB/s",
+                &short_task_id(task_id),
+                speed_mb
+            ));
         }
     }
 
@@ -57,12 +61,16 @@ impl ProgressManager {
         let mut bars = self.bars.write().await;
         if let Some(pb) = bars.remove(task_id) {
             if success {
-                pb.finish_with_message(format!("✅ {} 完成", &task_id[..8]));
+                pb.finish_with_message(format!("✅ {} 完成", &short_task_id(task_id)));
             } else {
-                pb.finish_with_message(format!("❌ {} 失败", &task_id[..8]));
+                pb.finish_with_message(format!("❌ {} 失败", &short_task_id(task_id)));
             }
         }
     }
+}
+
+pub(crate) fn short_task_id(task_id: &str) -> String {
+    task_id.chars().take(8).collect()
 }
 
 pub fn format_size(bytes: u64) -> String {
@@ -84,4 +92,15 @@ pub fn print_info(msg: &str) {
 #[allow(dead_code)]
 pub fn print_warning(msg: &str) {
     println!("{} {}", style("⚠").yellow().bold(), msg);
+}
+
+#[cfg(test)]
+mod tests {
+    use super::short_task_id;
+
+    #[test]
+    fn short_task_id_handles_short_and_unicode_ids() {
+        assert_eq!(short_task_id("abc"), "abc");
+        assert_eq!(short_task_id("任务编号123456"), "任务编号1234");
+    }
 }

@@ -1,7 +1,7 @@
 use crate::{
     cli::{QueueArgs, QueueCommands},
     config::ConfigStore,
-    ui::{ProgressManager, format_size, print_info, print_success},
+    ui::{ProgressManager, format_size, print_info, print_success, short_task_id},
 };
 use anyhow::{Result, anyhow};
 use console::style;
@@ -231,7 +231,7 @@ async fn start_queue(max_tasks: Option<usize>, connections: Option<usize>) -> Re
         while let Some(event) = event_rx.recv().await {
             match event {
                 DownloaderEvent::Task(TaskEvent::Started { task_id }) => {
-                    println!("🚀 开始: {}", &task_id[..8]);
+                    println!("🚀 开始: {}", &short_task_id(&task_id));
                 }
                 DownloaderEvent::Progress(ProgressEvent::Updated {
                     task_id,
@@ -254,19 +254,19 @@ async fn start_queue(max_tasks: Option<usize>, connections: Option<usize>) -> Re
                 }
                 DownloaderEvent::Task(TaskEvent::Failed { task_id, error }) => {
                     progress_mgr.finish_task(&task_id, false).await;
-                    eprintln!("❌ 失败 {}: {}", &task_id[..8], error);
+                    eprintln!("❌ 失败 {}: {}", &short_task_id(&task_id), error);
                 }
                 DownloaderEvent::Verification(VerificationEvent::Started { task_id }) => {
-                    println!("🔍 校验: {}", &task_id[..8]);
+                    println!("🔍 校验: {}", &short_task_id(&task_id));
                 }
                 DownloaderEvent::Verification(VerificationEvent::Completed {
                     task_id,
                     success,
                 }) => {
                     if success {
-                        println!("✅ 校验通过: {}", &task_id[..8]);
+                        println!("✅ 校验通过: {}", &short_task_id(&task_id));
                     } else {
-                        println!("❌ 校验失败: {}", &task_id[..8]);
+                        println!("❌ 校验失败: {}", &short_task_id(&task_id));
                     }
                 }
                 _ => {}

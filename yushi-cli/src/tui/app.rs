@@ -1,4 +1,4 @@
-use crate::{config::ConfigStore, tui::theme::ThemeColors};
+use crate::{config::ConfigStore, tui::theme::ThemeColors, ui::short_task_id};
 use anyhow::{Result, anyhow};
 use crossterm::event::{KeyCode, KeyEvent, KeyModifiers};
 use tokio::sync::mpsc;
@@ -395,11 +395,13 @@ impl App {
                     match task.status {
                         TaskStatus::Downloading => {
                             self.queue.pause_task(&task.id).await?;
-                            self.status_message = format!("已暂停任务: {}", &task.id[..8]);
+                            self.status_message =
+                                format!("已暂停任务: {}", &short_task_id(&task.id));
                         }
                         TaskStatus::Paused => {
                             self.queue.resume_task(&task.id).await?;
-                            self.status_message = format!("已恢复任务: {}", &task.id[..8]);
+                            self.status_message =
+                                format!("已恢复任务: {}", &short_task_id(&task.id));
                         }
                         _ => {}
                     }
@@ -413,7 +415,7 @@ impl App {
                     )
                 {
                     self.queue.cancel_task(&task.id).await?;
-                    self.status_message = format!("已取消任务: {}", &task.id[..8]);
+                    self.status_message = format!("已取消任务: {}", &short_task_id(&task.id));
                 }
             }
             (KeyCode::Char('d'), KeyModifiers::NONE) => {
@@ -424,14 +426,14 @@ impl App {
                     )
                 {
                     self.queue.remove_task(&task.id).await?;
-                    self.status_message = format!("已删除任务: {}", &task.id[..8]);
+                    self.status_message = format!("已删除任务: {}", &short_task_id(&task.id));
                     self.refresh_tasks().await?;
                 }
             }
             // 'D' — delete with file (confirm first)
             (KeyCode::Char('D'), KeyModifiers::SHIFT) => {
                 if let Some(task) = self.selected_task().cloned() {
-                    let short = task.id[..8.min(task.id.len())].to_string();
+                    let short = short_task_id(&task.id);
                     let filename = task
                         .dest
                         .file_name()
