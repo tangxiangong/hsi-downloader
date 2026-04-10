@@ -5,8 +5,8 @@
   "build": {
     "devUrl": "http://localhost:5173",
     "frontendDist": "../src-ui/dist",
-    "beforeDevCommand": "cd src-ui && bun run dev",
-    "beforeBuildCommand": "cd src-ui && bun run build"
+    "beforeDevCommand": "bun run dev",
+    "beforeBuildCommand": "bun run build"
   },
   "app": {
     "windows": [
