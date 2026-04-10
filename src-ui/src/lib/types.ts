@@ -92,6 +92,7 @@ export interface AddTaskOptions {
   speed_limit?: number;
   auto_rename_on_conflict?: boolean;
   selected_files?: number[];
+  headers?: Record<string, string>;
 }
 
 export interface TorrentFileInfo {
