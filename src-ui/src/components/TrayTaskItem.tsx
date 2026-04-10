@@ -45,7 +45,9 @@ const TrayTaskItem: Component<TrayTaskItemProps> = (props) => {
       <div class="flex items-start gap-3">
         <div class="min-w-0 flex-1">
           <div class="flex items-center gap-2">
-            <p class="truncate text-sm font-medium text-base-content">{filename()}</p>
+            <p class="truncate text-sm font-medium text-base-content">
+              {filename()}
+            </p>
             <span class="shrink-0 whitespace-nowrap rounded-full bg-base-200 px-2 py-0.5 text-[10px] font-medium text-base-content/60">
               {statusLabel(task().status)}
             </span>
@@ -56,7 +58,8 @@ const TrayTaskItem: Component<TrayTaskItemProps> = (props) => {
               fallback={<span>{formatBytes(task().downloaded)}</span>}
             >
               <span>
-                {formatBytes(task().downloaded)} / {formatBytes(task().total_size)}
+                {formatBytes(task().downloaded)} /{" "}
+                {formatBytes(task().total_size)}
               </span>
             </Show>
             <span>{` · ${formatSpeed(task().speed)}`}</span>

@@ -1,5 +1,12 @@
 import { getCurrentWebviewWindow } from "@tauri-apps/api/webviewWindow";
-import { type Component, createSignal, onCleanup, onMount, Match, Switch } from "solid-js";
+import {
+  type Component,
+  createSignal,
+  onCleanup,
+  onMount,
+  Match,
+  Switch,
+} from "solid-js";
 import Sidebar, { type Page } from "./components/Sidebar";
 import TasksPage from "./pages/TasksPage";
 import HistoryPage from "./pages/HistoryPage";
@@ -21,12 +28,13 @@ const App: Component = () => {
     await loadHistory();
     setupTaskEvents();
 
-    const unlisten = await getCurrentWebviewWindow().listen<NavigateMainPayload>(
-      "navigate-main",
-      (event) => {
-        setPage(event.payload.page ?? "tasks");
-      },
-    );
+    const unlisten =
+      await getCurrentWebviewWindow().listen<NavigateMainPayload>(
+        "navigate-main",
+        (event) => {
+          setPage(event.payload.page ?? "tasks");
+        },
+      );
 
     onCleanup(() => {
       void unlisten();

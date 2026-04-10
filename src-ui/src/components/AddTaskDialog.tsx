@@ -1,4 +1,10 @@
-import { type Component, createSignal, Show, For, createEffect } from "solid-js";
+import {
+  type Component,
+  createSignal,
+  Show,
+  For,
+  createEffect,
+} from "solid-js";
 import { addTask, listTorrentFiles, inferDestination } from "../lib/commands";
 import { refreshTasks } from "../stores/task-store";
 import { config } from "../stores/config-store";
@@ -33,15 +39,21 @@ const AddTaskDialog: Component<AddTaskDialogProps> = (props) => {
   const [showAdvanced, setShowAdvanced] = createSignal(false);
 
   // HTTP 高级：校验和
-  const [checksumType, setChecksumType] = createSignal<"none" | "Md5" | "Sha256">("none");
+  const [checksumType, setChecksumType] = createSignal<
+    "none" | "Md5" | "Sha256"
+  >("none");
   const [checksumValue, setChecksumValue] = createSignal("");
 
   // HTTP 高级：自定义 Headers
-  const [headers, setHeaders] = createSignal<{ key: string; value: string }[]>([]);
+  const [headers, setHeaders] = createSignal<{ key: string; value: string }[]>(
+    [],
+  );
 
   // BT：文件选择
   const [torrentFiles, setTorrentFiles] = createSignal<TorrentFileInfo[]>([]);
-  const [selectedFiles, setSelectedFiles] = createSignal<Set<number>>(new Set());
+  const [selectedFiles, setSelectedFiles] = createSignal<Set<number>>(
+    new Set(),
+  );
   const [loadingFiles, setLoadingFiles] = createSignal(false);
 
   // URL 变更时自动检测类型
@@ -111,7 +123,9 @@ const AddTaskDialog: Component<AddTaskDialogProps> = (props) => {
   }
 
   function updateHeader(index: number, field: "key" | "value", val: string) {
-    setHeaders(headers().map((h, i) => (i === index ? { ...h, [field]: val } : h)));
+    setHeaders(
+      headers().map((h, i) => (i === index ? { ...h, [field]: val } : h)),
+    );
   }
 
   async function handleSubmit(e: Event) {
@@ -154,7 +168,9 @@ const AddTaskDialog: Component<AddTaskDialogProps> = (props) => {
         }
 
         // HTTP 自定义 Headers
-        const validHeaders = headers().filter((h) => h.key.trim() && h.value.trim());
+        const validHeaders = headers().filter(
+          (h) => h.key.trim() && h.value.trim(),
+        );
         if (validHeaders.length > 0) {
           const headerMap: Record<string, string> = {};
           for (const h of validHeaders) {
@@ -203,7 +219,9 @@ const AddTaskDialog: Component<AddTaskDialogProps> = (props) => {
           {/* URL */}
           <div class="form-control">
             <label class="label">
-              <span class="label-text text-xs text-base-content/60">下载链接</span>
+              <span class="label-text text-xs text-base-content/60">
+                下载链接
+              </span>
             </label>
             <input
               type="text"
@@ -225,7 +243,9 @@ const AddTaskDialog: Component<AddTaskDialogProps> = (props) => {
           {/* 保存位置 */}
           <div class="form-control">
             <label class="label">
-              <span class="label-text text-xs text-base-content/60">保存位置</span>
+              <span class="label-text text-xs text-base-content/60">
+                保存位置
+              </span>
             </label>
             <div class="flex gap-2">
               <input
@@ -243,12 +263,16 @@ const AddTaskDialog: Component<AddTaskDialogProps> = (props) => {
           {/* 优先级 */}
           <div class="form-control">
             <label class="label">
-              <span class="label-text text-xs text-base-content/60">优先级</span>
+              <span class="label-text text-xs text-base-content/60">
+                优先级
+              </span>
             </label>
             <select
               class="select select-bordered w-full"
               value={priority()}
-              onChange={(e) => setPriority(e.currentTarget.value as TaskPriority)}
+              onChange={(e) =>
+                setPriority(e.currentTarget.value as TaskPriority)
+              }
             >
               <option value="Low">低</option>
               <option value="Normal">普通</option>
@@ -259,7 +283,9 @@ const AddTaskDialog: Component<AddTaskDialogProps> = (props) => {
           {/* 速度限制 */}
           <div class="form-control">
             <label class="label">
-              <span class="label-text text-xs text-base-content/60">速度限制 (KB/s，留空不限速)</span>
+              <span class="label-text text-xs text-base-content/60">
+                速度限制 (KB/s，留空不限速)
+              </span>
             </label>
             <input
               type="number"
@@ -287,14 +313,18 @@ const AddTaskDialog: Component<AddTaskDialogProps> = (props) => {
                 {/* 校验和 */}
                 <div class="form-control">
                   <label class="label">
-                    <span class="label-text text-xs text-base-content/60">校验和验证</span>
+                    <span class="label-text text-xs text-base-content/60">
+                      校验和验证
+                    </span>
                   </label>
                   <div class="flex gap-2">
                     <select
                       class="select select-bordered select-sm w-28"
                       value={checksumType()}
                       onChange={(e) =>
-                        setChecksumType(e.currentTarget.value as "none" | "Md5" | "Sha256")
+                        setChecksumType(
+                          e.currentTarget.value as "none" | "Md5" | "Sha256",
+                        )
                       }
                     >
                       <option value="none">无</option>
@@ -317,7 +347,9 @@ const AddTaskDialog: Component<AddTaskDialogProps> = (props) => {
                 <div class="form-control">
                   <div class="flex items-center justify-between">
                     <label class="label">
-                      <span class="label-text text-xs text-base-content/60">自定义 Headers</span>
+                      <span class="label-text text-xs text-base-content/60">
+                        自定义 Headers
+                      </span>
                     </label>
                     <button
                       type="button"
@@ -337,7 +369,11 @@ const AddTaskDialog: Component<AddTaskDialogProps> = (props) => {
                             placeholder="Header 名称"
                             value={header.key}
                             onInput={(e) =>
-                              updateHeader(index(), "key", e.currentTarget.value)
+                              updateHeader(
+                                index(),
+                                "key",
+                                e.currentTarget.value,
+                              )
                             }
                           />
                           <input
@@ -346,7 +382,11 @@ const AddTaskDialog: Component<AddTaskDialogProps> = (props) => {
                             placeholder="Header 值"
                             value={header.value}
                             onInput={(e) =>
-                              updateHeader(index(), "value", e.currentTarget.value)
+                              updateHeader(
+                                index(),
+                                "value",
+                                e.currentTarget.value,
+                              )
                             }
                           />
                           <button
@@ -380,12 +420,22 @@ const AddTaskDialog: Component<AddTaskDialogProps> = (props) => {
                 >
                   <div>
                     <div class="flex justify-between items-center mb-2">
-                      <span class="label-text text-sm font-medium">选择下载文件</span>
+                      <span class="label-text text-sm font-medium">
+                        选择下载文件
+                      </span>
                       <div class="flex gap-2">
-                        <button type="button" class="btn btn-xs" onClick={selectAll}>
+                        <button
+                          type="button"
+                          class="btn btn-xs"
+                          onClick={selectAll}
+                        >
                           全选
                         </button>
-                        <button type="button" class="btn btn-xs" onClick={selectNone}>
+                        <button
+                          type="button"
+                          class="btn btn-xs"
+                          onClick={selectNone}
+                        >
                           取消全选
                         </button>
                       </div>
@@ -400,7 +450,9 @@ const AddTaskDialog: Component<AddTaskDialogProps> = (props) => {
                               checked={selectedFiles().has(file.index)}
                               onChange={() => toggleFile(file.index)}
                             />
-                            <span class="text-sm flex-1 truncate">{file.name}</span>
+                            <span class="text-sm flex-1 truncate">
+                              {file.name}
+                            </span>
                             <span class="text-xs text-base-content/50">
                               {formatBytes(file.size)}
                             </span>

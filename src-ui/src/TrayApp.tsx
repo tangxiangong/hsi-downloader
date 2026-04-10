@@ -87,13 +87,22 @@ const TrayApp: Component = () => {
               </p>
             </div>
             <div class="flex items-center gap-2">
-              <button class="btn btn-ghost btn-sm rounded-full" onClick={handleHide}>
+              <button
+                class="btn btn-ghost btn-sm rounded-full"
+                onClick={handleHide}
+              >
                 隐藏
               </button>
-              <button class="btn btn-ghost btn-sm rounded-full" onClick={handleOpenSettings}>
+              <button
+                class="btn btn-ghost btn-sm rounded-full"
+                onClick={handleOpenSettings}
+              >
                 设置
               </button>
-              <button class="btn btn-primary btn-sm rounded-full" onClick={handleOpenMainWindow}>
+              <button
+                class="btn btn-primary btn-sm rounded-full"
+                onClick={handleOpenMainWindow}
+              >
                 打开主窗口
               </button>
             </div>
@@ -104,9 +113,7 @@ const TrayApp: Component = () => {
               <p class="text-[11px] uppercase tracking-[0.18em] text-base-content/45">
                 总体进度
               </p>
-              <p class="mt-2 text-lg font-semibold">
-                {progressLabel()}
-              </p>
+              <p class="mt-2 text-lg font-semibold">{progressLabel()}</p>
               <p class="mt-1 text-xs text-base-content/50">
                 {summary().totalSize > 0
                   ? `${formatBytes(summary().totalDownloaded)} / ${formatBytes(summary().totalSize)}`
@@ -163,7 +170,9 @@ const TrayApp: Component = () => {
             }
           >
             <div class="flex h-full flex-col gap-2 overflow-y-auto pr-1">
-              <For each={visibleTasks()}>{(task) => <TrayTaskItem task={task} />}</For>
+              <For each={visibleTasks()}>
+                {(task) => <TrayTaskItem task={task} />}
+              </For>
             </div>
           </Show>
         </div>

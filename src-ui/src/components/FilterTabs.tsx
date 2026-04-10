@@ -9,7 +9,11 @@ interface FilterTabsProps {
 const FilterTabs: Component<FilterTabsProps> = (props) => {
   const tabs: { filter: TaskFilter; label: string; countKey: TaskFilter }[] = [
     { filter: "all", label: "\u5168\u90e8", countKey: "all" },
-    { filter: "downloading", label: "\u4e0b\u8f7d\u4e2d", countKey: "downloading" },
+    {
+      filter: "downloading",
+      label: "\u4e0b\u8f7d\u4e2d",
+      countKey: "downloading",
+    },
     { filter: "completed", label: "\u5df2\u5b8c\u6210", countKey: "completed" },
   ];
 
@@ -25,9 +29,13 @@ const FilterTabs: Component<FilterTabsProps> = (props) => {
           onClick={() => props.onChange(tab.filter)}
         >
           {tab.label}
-          <span class={`ml-1.5 text-[10px] ${
-            props.current === tab.filter ? "text-base-content/60" : "text-base-content/30"
-          }`}>
+          <span
+            class={`ml-1.5 text-[10px] ${
+              props.current === tab.filter
+                ? "text-base-content/60"
+                : "text-base-content/30"
+            }`}
+          >
             {taskCounts()[tab.countKey]}
           </span>
         </button>

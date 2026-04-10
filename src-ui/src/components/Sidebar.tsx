@@ -11,7 +11,11 @@ interface SidebarProps {
 }
 
 const Sidebar: Component<SidebarProps> = (props) => {
-  const items: { page: Page; icon: Component<JSX.SvgSVGAttributes<SVGSVGElement>>; label: string }[] = [
+  const items: {
+    page: Page;
+    icon: Component<JSX.SvgSVGAttributes<SVGSVGElement>>;
+    label: string;
+  }[] = [
     { page: "tasks", icon: DownloadIcon, label: "任务" },
     { page: "history", icon: ListIcon, label: "历史" },
     { page: "settings", icon: SettingsIcon, label: "设置" },

@@ -78,7 +78,10 @@ export const taskSummary = createMemo(() => {
     (sum, task) => sum + task.downloaded,
     0,
   );
-  const totalSize = knownSizeTasks.reduce((sum, task) => sum + task.total_size, 0);
+  const totalSize = knownSizeTasks.reduce(
+    (sum, task) => sum + task.total_size,
+    0,
+  );
   const totalSpeed = list.reduce((sum, task) => sum + task.speed, 0);
 
   return {
@@ -179,13 +182,22 @@ export function setupTaskEvents() {
     }
 
     if (event.type === "Progress" && "ChunkProgress" in event.data) {
-      const { task_id, chunk_index, downloaded, size, complete } = event.data.ChunkProgress;
+      const { task_id, chunk_index, downloaded, size, complete } =
+        event.data.ChunkProgress;
       const currentTask = tasks.find((task) => task.id === task_id);
       if (!currentTask) return;
 
-      if (!currentTask.chunk_progress || currentTask.chunk_progress.length <= chunk_index) {
+      if (
+        !currentTask.chunk_progress ||
+        currentTask.chunk_progress.length <= chunk_index
+      ) {
         const nextChunks = [...(currentTask.chunk_progress ?? [])];
-        nextChunks[chunk_index] = { index: chunk_index, downloaded, size, complete };
+        nextChunks[chunk_index] = {
+          index: chunk_index,
+          downloaded,
+          size,
+          complete,
+        };
         setTasks((t) => t.id === task_id, {
           chunk_progress: nextChunks,
         });
@@ -223,7 +235,8 @@ export function setupTaskEvents() {
       });
     }
     if (event.type === "Progress" && "BtStatus" in event.data) {
-      const { task_id, peers, seeders, upload_speed, uploaded } = event.data.BtStatus;
+      const { task_id, peers, seeders, upload_speed, uploaded } =
+        event.data.BtStatus;
       const currentTask = tasks.find((task) => task.id === task_id);
       if (
         currentTask &&

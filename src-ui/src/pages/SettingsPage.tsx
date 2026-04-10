@@ -1,4 +1,12 @@
-import { type Component, type JSX, For, Match, Switch, createMemo, createSignal } from "solid-js";
+import {
+  type Component,
+  type JSX,
+  For,
+  Match,
+  Switch,
+  createMemo,
+  createSignal,
+} from "solid-js";
 import { open } from "@tauri-apps/plugin-dialog";
 import { check } from "@tauri-apps/plugin-updater";
 import ThemeToggle from "../components/ThemeToggle";
@@ -141,13 +149,16 @@ const SettingsPage: Component = () => {
               Control Deck
             </p>
             <div class="mt-3 flex flex-wrap items-center gap-3">
-              <h2 class="text-3xl font-semibold tracking-tight text-base-content">设置中心</h2>
+              <h2 class="text-3xl font-semibold tracking-tight text-base-content">
+                设置中心
+              </h2>
               <span class="rounded-full border border-base-300/80 bg-base-100/80 px-3 py-1 text-xs font-medium text-base-content/60">
                 {saving() ? "正在保存" : "配置已同步"}
               </span>
             </div>
             <p class="mt-3 max-w-xl text-sm leading-7 text-base-content/58">
-              把下载行为、网络参数、BitTorrent 策略和外观偏好放在同一页里，减少来回跳转和低效查找。
+              把下载行为、网络参数、BitTorrent
+              策略和外观偏好放在同一页里，减少来回跳转和低效查找。
             </p>
           </div>
 
@@ -160,7 +171,9 @@ const SettingsPage: Component = () => {
                 <p class="mt-2 truncate text-base font-semibold text-base-content">
                   {card.value}
                 </p>
-                <p class="mt-1 truncate text-xs text-base-content/48">{card.meta}</p>
+                <p class="mt-1 truncate text-xs text-base-content/48">
+                  {card.meta}
+                </p>
               </div>
             ))}
           </div>
@@ -195,7 +208,9 @@ const SettingsPage: Component = () => {
               <p class="text-[11px] font-semibold uppercase tracking-[0.22em] text-base-content/40">
                 Transfer
               </p>
-              <h3 class="text-lg font-semibold text-base-content">下载与并发</h3>
+              <h3 class="text-lg font-semibold text-base-content">
+                下载与并发
+              </h3>
               <p class="max-w-2xl text-sm leading-6 text-base-content/55">
                 定义默认保存路径、每个任务的连接数和队列同时执行规模。
               </p>
@@ -213,7 +228,10 @@ const SettingsPage: Component = () => {
                     value={config.default_download_path}
                     readOnly
                   />
-                  <button class="btn btn-primary h-11 rounded-2xl px-5" onClick={pickDefaultDir}>
+                  <button
+                    class="btn btn-primary h-11 rounded-2xl px-5"
+                    onClick={pickDefaultDir}
+                  >
                     浏览目录
                   </button>
                 </div>
@@ -233,7 +251,8 @@ const SettingsPage: Component = () => {
                     handleSave(
                       "max_concurrent_downloads",
                       parseInt(event.currentTarget.value, 10),
-                    )}
+                    )
+                  }
                 />
               </SettingsField>
 
@@ -251,7 +270,8 @@ const SettingsPage: Component = () => {
                     handleSave(
                       "max_concurrent_tasks",
                       parseInt(event.currentTarget.value, 10),
-                    )}
+                    )
+                  }
                 />
               </SettingsField>
             </div>
@@ -265,9 +285,12 @@ const SettingsPage: Component = () => {
               <p class="text-[11px] font-semibold uppercase tracking-[0.22em] text-base-content/40">
                 Network
               </p>
-              <h3 class="text-lg font-semibold text-base-content">网络与请求参数</h3>
+              <h3 class="text-lg font-semibold text-base-content">
+                网络与请求参数
+              </h3>
               <p class="max-w-2xl text-sm leading-6 text-base-content/55">
-                调整代理、请求超时、分块大小和 User-Agent，优化不同网络环境下的表现。
+                调整代理、请求超时、分块大小和
+                User-Agent，优化不同网络环境下的表现。
               </p>
             </div>
             <div class="mt-5 grid gap-4 md:grid-cols-2">
@@ -281,7 +304,9 @@ const SettingsPage: Component = () => {
                   class={inputClass}
                   placeholder="socks5://127.0.0.1:1080"
                   value={config.proxy ?? ""}
-                  onChange={(event) => handleSave("proxy", event.currentTarget.value || null)}
+                  onChange={(event) =>
+                    handleSave("proxy", event.currentTarget.value || null)
+                  }
                 />
               </SettingsField>
 
@@ -294,7 +319,9 @@ const SettingsPage: Component = () => {
                   type="text"
                   class={inputClass}
                   value={config.user_agent}
-                  onChange={(event) => handleSave("user_agent", event.currentTarget.value)}
+                  onChange={(event) =>
+                    handleSave("user_agent", event.currentTarget.value)
+                  }
                 />
               </SettingsField>
 
@@ -309,7 +336,11 @@ const SettingsPage: Component = () => {
                     class={`${inputClass} pr-14`}
                     value={config.timeout}
                     onChange={(event) =>
-                      handleSave("timeout", parseInt(event.currentTarget.value, 10))}
+                      handleSave(
+                        "timeout",
+                        parseInt(event.currentTarget.value, 10),
+                      )
+                    }
                   />
                   <span class="pointer-events-none absolute inset-y-0 right-4 flex items-center text-xs font-medium text-base-content/45">
                     秒
@@ -331,7 +362,8 @@ const SettingsPage: Component = () => {
                       handleSave(
                         "chunk_size",
                         parseInt(event.currentTarget.value, 10) * 1048576,
-                      )}
+                      )
+                    }
                   />
                   <span class="pointer-events-none absolute inset-y-0 right-4 flex items-center text-xs font-medium text-base-content/45">
                     MB
@@ -349,9 +381,12 @@ const SettingsPage: Component = () => {
               <p class="text-[11px] font-semibold uppercase tracking-[0.22em] text-base-content/40">
                 BitTorrent
               </p>
-              <h3 class="text-lg font-semibold text-base-content">种子下载策略</h3>
+              <h3 class="text-lg font-semibold text-base-content">
+                种子下载策略
+              </h3>
               <p class="max-w-2xl text-sm leading-6 text-base-content/55">
-                控制 DHT、做种、上传和监听端口，让 BT 任务行为更符合你的网络环境。
+                控制 DHT、做种、上传和监听端口，让 BT
+                任务行为更符合你的网络环境。
               </p>
             </div>
             <div class="mt-5 grid gap-4 md:grid-cols-2">
@@ -362,7 +397,9 @@ const SettingsPage: Component = () => {
               >
                 <label class="flex items-center justify-between rounded-2xl border border-base-300/70 bg-base-100/85 px-4 py-3">
                   <div>
-                    <p class="text-sm font-medium text-base-content">启用 DHT</p>
+                    <p class="text-sm font-medium text-base-content">
+                      启用 DHT
+                    </p>
                     <p class="mt-1 text-xs text-base-content/50">
                       提升节点发现能力和磁力链接启动速度
                     </p>
@@ -375,7 +412,8 @@ const SettingsPage: Component = () => {
                       handleSave("bt", {
                         ...config.bt,
                         dht_enabled: event.currentTarget.checked,
-                      })}
+                      })
+                    }
                   />
                 </label>
               </SettingsField>
@@ -389,7 +427,11 @@ const SettingsPage: Component = () => {
                     type="number"
                     class={`${inputClass} pr-16`}
                     placeholder="不限"
-                    value={config.bt.upload_limit ? config.bt.upload_limit / 1024 : ""}
+                    value={
+                      config.bt.upload_limit
+                        ? config.bt.upload_limit / 1024
+                        : ""
+                    }
                     onChange={(event) => {
                       const value = event.currentTarget.value;
                       handleSave("bt", {
@@ -496,7 +538,10 @@ const SettingsPage: Component = () => {
                 </p>
               </div>
 
-              <button class="btn btn-primary h-11 w-full rounded-2xl" onClick={checkUpdate}>
+              <button
+                class="btn btn-primary h-11 w-full rounded-2xl"
+                onClick={checkUpdate}
+              >
                 检查更新
               </button>
 

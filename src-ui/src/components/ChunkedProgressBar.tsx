@@ -13,7 +13,8 @@ function chunkFillStyle(
   chunk: ChunkProgressInfo,
   statusClass: string,
 ): Record<string, string> {
-  const fill = chunk.size > 0 ? Math.min(100, (chunk.downloaded / chunk.size) * 100) : 0;
+  const fill =
+    chunk.size > 0 ? Math.min(100, (chunk.downloaded / chunk.size) * 100) : 0;
   const background =
     statusClass === "progress-paused"
       ? "var(--color-warning)"
