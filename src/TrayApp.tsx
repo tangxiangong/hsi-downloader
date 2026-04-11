@@ -116,9 +116,14 @@ const TrayApp: Component = () => {
               <p class="mt-2 text-lg font-semibold">{progressLabel()}</p>
               <p class="mt-1 text-xs text-base-content/50">
                 {summary().totalSize > 0
-                  ? `${formatBytes(summary().totalDownloaded)} / ${formatBytes(summary().totalSize)}`
+                  ? formatBytes(summary().totalDownloaded)
                   : "等待获取大小"}
               </p>
+              <Show when={summary().totalSize > 0}>
+                <p class="text-xs text-base-content/40">
+                  / {formatBytes(summary().totalSize)}
+                </p>
+              </Show>
             </div>
             <div class="rounded-2xl bg-base-200/70 p-3">
               <p class="text-[11px] uppercase tracking-[0.18em] text-base-content/45">
