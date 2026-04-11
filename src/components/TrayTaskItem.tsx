@@ -51,7 +51,7 @@ const TrayTaskItem: Component<TrayTaskItemProps> = (props) => {
               {statusLabel(task().status)}
             </span>
           </div>
-          <p class="mt-1 text-xs text-base-content/55">
+          <p class="mt-1 text-xs text-base-content/55 whitespace-nowrap overflow-hidden text-ellipsis">
             <Show
               when={task().total_size > 0}
               fallback={<span>{formatBytes(task().downloaded)}</span>}

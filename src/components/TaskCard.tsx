@@ -67,7 +67,7 @@ const TaskCard: Component<TaskCardProps> = (props) => {
           </div>
           <div class="flex-1 min-w-0">
             <h3 class="text-sm font-medium truncate">{filename()}</h3>
-            <p class="text-xs text-base-content/40 mt-0.5">
+            <p class="text-xs text-base-content/40 mt-0.5 whitespace-nowrap overflow-hidden text-ellipsis">
               <Show
                 when={t().status === "Downloading"}
                 fallback={
