@@ -8,6 +8,7 @@ import {
   statusLabel,
   getFileIcon,
 } from "../lib/format";
+import { taskProgressPercent } from "../lib/progress";
 import {
   pauseTask,
   resumeTask,
@@ -16,6 +17,7 @@ import {
   removeTask,
   removeTaskWithFile,
 } from "../lib/commands";
+import { config } from "../stores/config-store";
 import { refreshTasks } from "../stores/task-store";
 
 interface TaskCardProps {
@@ -24,8 +26,7 @@ interface TaskCardProps {
 
 const TaskCard: Component<TaskCardProps> = (props) => {
   const t = () => props.task;
-  const progress = () =>
-    t().total_size > 0 ? (t().downloaded / t().total_size) * 100 : 0;
+  const progress = () => taskProgressPercent(t());
   const filename = () => {
     const parts = t().dest.split(/[/\\]/);
     return parts[parts.length - 1] || t().url;
@@ -175,7 +176,10 @@ const TaskCard: Component<TaskCardProps> = (props) => {
         {/* Row 2: Progress bar */}
         <Show when={t().total_size > 0 || t().status === "Downloading"}>
           <div class="flex items-center gap-2 mt-2">
-            <ChunkedProgressBar task={t()} />
+            <ChunkedProgressBar
+              task={t()}
+              concurrency={config.max_concurrent_downloads}
+            />
             <span class="text-xs font-medium text-base-content/60 w-10 text-right">
               {Math.round(progress())}%
             </span>
