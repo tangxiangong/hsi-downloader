@@ -7,7 +7,9 @@ import {
   formatSpeed,
   statusLabel,
 } from "../lib/format";
+import { taskProgressPercent } from "../lib/progress";
 import { cancelTask, pauseTask, resumeTask } from "../lib/commands";
+import { config } from "../stores/config-store";
 import { refreshTasks } from "../stores/task-store";
 
 interface TrayTaskItemProps {
@@ -16,10 +18,7 @@ interface TrayTaskItemProps {
 
 const TrayTaskItem: Component<TrayTaskItemProps> = (props) => {
   const task = () => props.task;
-  const percent = () =>
-    task().total_size > 0
-      ? Math.min(100, (task().downloaded / task().total_size) * 100)
-      : 0;
+  const percent = () => taskProgressPercent(task());
   const filename = () => {
     const parts = task().dest.split(/[/\\]/);
     return parts[parts.length - 1] || task().url;
@@ -90,7 +89,11 @@ const TrayTaskItem: Component<TrayTaskItemProps> = (props) => {
       </div>
 
       <div class="mt-2 flex items-center gap-2">
-        <ChunkedProgressBar task={task()} compact />
+        <ChunkedProgressBar
+          task={task()}
+          compact
+          concurrency={config.max_concurrent_downloads}
+        />
         <span class="w-10 text-right text-[11px] font-medium text-base-content/55">
           {task().total_size > 0 ? `${Math.round(percent())}%` : "--"}
         </span>

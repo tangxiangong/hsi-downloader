@@ -1,20 +1,24 @@
 import { Index, type Component, Show, createMemo } from "solid-js";
-import type { ChunkProgressInfo, DownloadTask } from "../lib/types";
+import type { DownloadTask } from "../lib/types";
 import { progressClass } from "../lib/format";
+import {
+  buildConcurrentProgressSegments,
+  type ConcurrentProgressSegment,
+  taskProgressPercent,
+} from "../lib/progress";
 
 interface ChunkedProgressBarProps {
   task: DownloadTask;
   compact?: boolean;
+  concurrency: number;
 }
 
-const CHUNK_GAP_REM = 0.125;
+const SEGMENT_GAP_REM = 0.125;
 
-function chunkFillStyle(
-  chunk: ChunkProgressInfo,
+function segmentFillStyle(
+  segment: ConcurrentProgressSegment,
   statusClass: string,
 ): Record<string, string> {
-  const fill =
-    chunk.size > 0 ? Math.min(100, (chunk.downloaded / chunk.size) * 100) : 0;
   const background =
     statusClass === "progress-paused"
       ? "var(--color-warning)"
@@ -25,24 +29,23 @@ function chunkFillStyle(
           : "linear-gradient(90deg, var(--color-primary), var(--color-accent))";
 
   return {
-    width: `${fill}%`,
+    width: `${segment.percent}%`,
     background,
   };
 }
 
 const ChunkedProgressBar: Component<ChunkedProgressBarProps> = (props) => {
   const chunks = createMemo(() => props.task.chunk_progress ?? []);
+  const segments = createMemo(() =>
+    buildConcurrentProgressSegments(chunks(), props.concurrency),
+  );
   const isSegmented = createMemo(
     () =>
-      chunks().length > 1 &&
+      segments().length > 1 &&
       props.task.status !== "Completed" &&
       chunks().some((chunk) => !chunk.complete),
   );
-  const mergedProgress = createMemo(() =>
-    props.task.total_size > 0
-      ? Math.min(100, (props.task.downloaded / props.task.total_size) * 100)
-      : 0,
-  );
+  const mergedProgress = createMemo(() => taskProgressPercent(props.task));
   const trackHeight = () => (props.compact ? "0.4rem" : "0.55rem");
   const statusClass = createMemo(() => progressClass(props.task.status));
 
@@ -59,17 +62,17 @@ const ChunkedProgressBar: Component<ChunkedProgressBarProps> = (props) => {
     >
       <div
         class="flex flex-1 items-stretch overflow-hidden rounded-full bg-base-300/80"
-        style={{ height: trackHeight(), gap: `${CHUNK_GAP_REM}rem` }}
+        style={{ height: trackHeight(), gap: `${SEGMENT_GAP_REM}rem` }}
       >
-        <Index each={chunks()}>
-          {(chunk) => (
+        <Index each={segments()}>
+          {(segment) => (
             <div
-              class="relative min-w-[0.35rem] flex-1 overflow-hidden rounded-full bg-base-300"
-              style={{ flex: `${Math.max(chunk().size, 1)} 1 0%` }}
+              class="relative min-w-[1.75rem] flex-1 overflow-hidden rounded-full bg-base-300"
+              style={{ flex: `${Math.max(segment().size, 1)} 1 0%` }}
             >
               <div
                 class="absolute inset-y-0 left-0 rounded-full"
-                style={chunkFillStyle(chunk(), statusClass())}
+                style={segmentFillStyle(segment(), statusClass())}
               />
             </div>
           )}
