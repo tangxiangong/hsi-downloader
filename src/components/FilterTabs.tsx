@@ -8,13 +8,13 @@ interface FilterTabsProps {
 
 const FilterTabs: Component<FilterTabsProps> = (props) => {
   const tabs: { filter: TaskFilter; label: string; countKey: TaskFilter }[] = [
-    { filter: "all", label: "\u5168\u90e8", countKey: "all" },
+    { filter: "all", label: "全部", countKey: "all" },
     {
       filter: "downloading",
-      label: "\u4e0b\u8f7d\u4e2d",
+      label: "下载中",
       countKey: "downloading",
     },
-    { filter: "completed", label: "\u5df2\u5b8c\u6210", countKey: "completed" },
+    { filter: "completed", label: "已完成", countKey: "completed" },
   ];
 
   return (

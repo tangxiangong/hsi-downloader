@@ -19,6 +19,11 @@ import {
 } from "../lib/commands";
 import { config } from "../stores/config-store";
 import { refreshTasks } from "../stores/task-store";
+import PauseIcon from "../icons/pause.svg";
+import PlayIcon from "../icons/play.svg";
+import XIcon from "../icons/x.svg";
+import RetryIcon from "../icons/retry.svg";
+import TrashIcon from "../icons/trash.svg";
 
 interface TaskCardProps {
   task: DownloadTask;
@@ -76,7 +81,7 @@ const TaskCard: Component<TaskCardProps> = (props) => {
                       t().total_size > 0 ? t().total_size : t().downloaded,
                     )}
                     {t().status !== "Pending" &&
-                      ` \u00b7 ${statusLabel(t().status)}`}
+                      ` · ${statusLabel(t().status)}`}
                   </span>
                 }
               >
@@ -84,21 +89,21 @@ const TaskCard: Component<TaskCardProps> = (props) => {
                   {formatBytes(t().downloaded)} / {formatBytes(t().total_size)}
                   {t().bt_info ? (
                     <>
-                      {" \u00b7 \u2193"}
+                      {" · ↓"}
                       {formatSpeed(t().speed)}
-                      {" \u00b7 \u2191"}
+                      {" · ↑"}
                       {formatSpeed(t().bt_info!.upload_speed)}
-                      {" \u00b7 "}
+                      {" · "}
                       {t().bt_info!.peers}
                       {"P"}
                       {t().eta != null &&
-                        ` \u00b7 \u5269\u4f59 ${formatEta(t().eta)}`}
+                        ` · 剩余 ${formatEta(t().eta)}`}
                     </>
                   ) : (
                     <>
-                      {" \u00b7 "}
+                      {" · "}
                       {formatSpeed(t().speed)}
-                      {t().eta != null && ` \u00b7 ${formatEta(t().eta)}`}
+                      {t().eta != null && ` · ${formatEta(t().eta)}`}
                     </>
                   )}
                 </span>
@@ -110,18 +115,18 @@ const TaskCard: Component<TaskCardProps> = (props) => {
               <button
                 class="btn-icon"
                 onClick={handlePause}
-                title="\u6682\u505c"
+                title="暂停"
               >
-                {"\u23f8"}
+                <PauseIcon class="w-4 h-4" />
               </button>
             </Show>
             <Show when={t().status === "Paused"}>
               <button
                 class="btn-icon"
                 onClick={handleResume}
-                title="\u6062\u590d"
+                title="恢复"
               >
-                {"\u25b6"}
+                <PlayIcon class="w-4 h-4" />
               </button>
             </Show>
             <Show
@@ -134,9 +139,9 @@ const TaskCard: Component<TaskCardProps> = (props) => {
               <button
                 class="btn-icon hover:!text-error"
                 onClick={handleCancel}
-                title="\u53d6\u6d88"
+                title="取消"
               >
-                {"\u2715"}
+                <XIcon class="w-4 h-4" />
               </button>
             </Show>
             <Show when={t().status === "Failed"}>
@@ -145,7 +150,7 @@ const TaskCard: Component<TaskCardProps> = (props) => {
                 onClick={handleRetry}
                 title="重试"
               >
-                {"↻"}
+                <RetryIcon class="w-4 h-4" />
               </button>
             </Show>
             <Show
@@ -158,16 +163,16 @@ const TaskCard: Component<TaskCardProps> = (props) => {
               <button
                 class="btn-icon"
                 onClick={handleRemove}
-                title="\u79fb\u9664"
+                title="移除"
               >
-                {"\u2715"}
+                <XIcon class="w-4 h-4" />
               </button>
               <button
                 class="btn-icon hover:!text-error"
                 onClick={handleRemoveWithFile}
-                title="\u5220\u9664\u6587\u4ef6"
+                title="删除文件"
               >
-                {"\ud83d\uddd1"}
+                <TrashIcon class="w-4 h-4" />
               </button>
             </Show>
           </div>

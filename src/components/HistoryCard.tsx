@@ -8,6 +8,8 @@ import {
 } from "../lib/format";
 import { removeHistory, removeHistoryWithFile } from "../lib/commands";
 import { refreshHistory } from "../stores/history-store";
+import XIcon from "../icons/x.svg";
+import TrashIcon from "../icons/trash.svg";
 
 interface HistoryCardProps {
   task: CompletedTask;
@@ -40,24 +42,24 @@ const HistoryCard: Component<HistoryCardProps> = (props) => {
           <div class="flex-1 min-w-0">
             <h3 class="text-sm font-medium truncate">{filename()}</h3>
             <p class="text-xs text-base-content/40 mt-0.5">
-              {formatBytes(t().total_size)} \u00b7 \u5e73\u5747{" "}
-              {formatSpeed(t().avg_speed)} \u00b7 {formatDate(t().completed_at)}
+              {formatBytes(t().total_size)} · 平均{" "}
+              {formatSpeed(t().avg_speed)} · {formatDate(t().completed_at)}
             </p>
           </div>
           <div class="flex items-center gap-1 shrink-0">
             <button
               class="btn-icon"
               onClick={handleRemove}
-              title="\u79fb\u9664\u8bb0\u5f55"
+              title="移除记录"
             >
-              {"\u2715"}
+              <XIcon class="w-4 h-4" />
             </button>
             <button
               class="btn-icon hover:!text-error"
               onClick={handleRemoveWithFile}
-              title="\u5220\u9664\u6587\u4ef6"
+              title="删除文件"
             >
-              {"\ud83d\uddd1"}
+              <TrashIcon class="w-4 h-4" />
             </button>
           </div>
         </div>

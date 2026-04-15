@@ -14,9 +14,9 @@ const HistoryPage: Component = () => {
     <div>
       <div class="flex items-center justify-between mb-5">
         <div>
-          <h2 class="text-xl font-bold">{"\u5386\u53f2"}</h2>
+          <h2 class="text-xl font-bold">历史</h2>
           <p class="text-xs text-base-content/40 mt-0.5">
-            {history.length} {"\u6761\u8bb0\u5f55"}
+            {history.length} 条记录
           </p>
         </div>
         <button
@@ -24,7 +24,7 @@ const HistoryPage: Component = () => {
           onClick={handleClear}
           disabled={history.length === 0}
         >
-          {"\u6e05\u7a7a"}
+          清空
         </button>
       </div>
 
@@ -33,8 +33,8 @@ const HistoryPage: Component = () => {
           each={history}
           fallback={
             <div class="text-center text-base-content/30 py-16">
-              <div class="text-4xl mb-3">{"\u2630"}</div>
-              <p class="text-sm">{"\u6682\u65e0\u5386\u53f2\u8bb0\u5f55"}</p>
+              <div class="text-4xl mb-3">☰</div>
+              <p class="text-sm">暂无历史记录</p>
             </div>
           }
         >

@@ -11,6 +11,9 @@ import { taskProgressPercent } from "../lib/progress";
 import { cancelTask, pauseTask, resumeTask } from "../lib/commands";
 import { config } from "../stores/config-store";
 import { refreshTasks } from "../stores/task-store";
+import PauseIcon from "../icons/pause.svg";
+import PlayIcon from "../icons/play.svg";
+import XIcon from "../icons/x.svg";
 
 interface TrayTaskItemProps {
   task: DownloadTask;
@@ -70,12 +73,12 @@ const TrayTaskItem: Component<TrayTaskItemProps> = (props) => {
         <div class="flex shrink-0 items-center gap-1">
           <Show when={task().status === "Downloading"}>
             <button class="btn-icon btn-xs" onClick={handlePause} title="暂停">
-              {"⏸"}
+              <PauseIcon class="w-3.5 h-3.5" />
             </button>
           </Show>
           <Show when={task().status === "Paused"}>
             <button class="btn-icon btn-xs" onClick={handleResume} title="恢复">
-              {"▶"}
+              <PlayIcon class="w-3.5 h-3.5" />
             </button>
           </Show>
           <button
@@ -83,7 +86,7 @@ const TrayTaskItem: Component<TrayTaskItemProps> = (props) => {
             onClick={handleCancel}
             title="取消"
           >
-            {"✕"}
+            <XIcon class="w-3.5 h-3.5" />
           </button>
         </div>
       </div>

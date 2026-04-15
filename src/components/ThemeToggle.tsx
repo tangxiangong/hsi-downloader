@@ -8,9 +8,9 @@ interface ThemeToggleProps {
 
 const ThemeToggle: Component<ThemeToggleProps> = (props) => {
   const options: { value: AppTheme; label: string }[] = [
-    { value: "light", label: "\u6d45\u8272" },
-    { value: "dark", label: "\u6df1\u8272" },
-    { value: "system", label: "\u8ddf\u968f\u7cfb\u7edf" },
+    { value: "light", label: "浅色" },
+    { value: "dark", label: "深色" },
+    { value: "system", label: "跟随系统" },
   ];
 
   return (
