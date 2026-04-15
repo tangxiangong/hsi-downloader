@@ -101,6 +101,7 @@ async fn add_task(
             auto_rename_on_conflict: true,
             selected_files,
             headers: None,
+            config: Default::default(),
         })
         .await?;
 

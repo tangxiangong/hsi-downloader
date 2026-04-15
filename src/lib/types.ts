@@ -59,6 +59,7 @@ export interface DownloadTask {
   source: DownloadSource;
   bt_info: BtTaskInfo | null;
   chunk_progress?: ChunkProgressInfo[] | null;
+  config?: TaskConfig;
 }
 
 export interface CompletedTask {
@@ -84,6 +85,14 @@ export interface AppConfig {
   bt: BtConfig;
 }
 
+export interface TaskConfig {
+  max_concurrent?: number;
+  chunk_size?: number;
+  proxy?: string;
+  timeout?: number;
+  user_agent?: string;
+}
+
 export interface AddTaskOptions {
   url: string;
   dest: string;
@@ -93,6 +102,7 @@ export interface AddTaskOptions {
   auto_rename_on_conflict?: boolean;
   selected_files?: number[];
   headers?: Record<string, string>;
+  config?: TaskConfig;
 }
 
 export interface TorrentFileInfo {

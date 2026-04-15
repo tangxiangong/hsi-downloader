@@ -251,6 +251,24 @@ pub struct Task {
     /// HTTP 分块下载进度信息
     #[serde(default)]
     pub chunk_progress: Option<Vec<ChunkProgressInfo>>,
+    /// 任务独立配置覆盖
+    #[serde(default)]
+    pub config: TaskConfig,
+}
+
+/// 每个任务的独立配置覆盖（未设置的字段继承全局配置）
+#[derive(Debug, Clone, Default, Serialize, Deserialize)]
+pub struct TaskConfig {
+    /// 最大并发连接数
+    pub max_concurrent: Option<usize>,
+    /// 分块大小（字节）
+    pub chunk_size: Option<u64>,
+    /// 代理 URL（http/https/socks5）
+    pub proxy: Option<String>,
+    /// 连接超时（秒）
+    pub timeout: Option<u64>,
+    /// 用户代理
+    pub user_agent: Option<String>,
 }
 
 /// 下载任务（向后兼容）
@@ -289,6 +307,29 @@ impl Default for Config {
     }
 }
 
+impl Config {
+    /// 用任务独立配置覆盖全局配置，返回该任务的有效配置
+    pub fn with_task_overrides(
+        &self,
+        task: &TaskConfig,
+        task_headers: &HashMap<String, String>,
+    ) -> Self {
+        Self {
+            max_concurrent: task.max_concurrent.unwrap_or(self.max_concurrent),
+            chunk_size: task.chunk_size.unwrap_or(self.chunk_size),
+            speed_limit: self.speed_limit,
+            headers: if task_headers.is_empty() {
+                self.headers.clone()
+            } else {
+                task_headers.clone()
+            },
+            proxy: task.proxy.clone().or_else(|| self.proxy.clone()),
+            timeout: task.timeout.unwrap_or(self.timeout),
+            user_agent: task.user_agent.clone().or_else(|| self.user_agent.clone()),
+        }
+    }
+}
+
 #[derive(Debug, Clone, Deserialize)]
 pub struct AddTaskOptions {
     pub url: String,
@@ -303,6 +344,9 @@ pub struct AddTaskOptions {
     /// 自定义 HTTP 请求头
     #[serde(default)]
     pub headers: Option<HashMap<String, String>>,
+    /// 任务独立配置覆盖
+    #[serde(default)]
+    pub config: TaskConfig,
 }
 
 /// 下载配置（向后兼容）

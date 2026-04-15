@@ -9,8 +9,9 @@ import { addTask, listTorrentFiles, inferDestination } from "../lib/commands";
 import { refreshTasks } from "../stores/task-store";
 import { config } from "../stores/config-store";
 import { open } from "@tauri-apps/plugin-dialog";
-import type { TorrentFileInfo, TaskPriority, ChecksumType } from "../lib/types";
+import type { TorrentFileInfo, TaskPriority, ChecksumType, TaskConfig } from "../lib/types";
 import { formatBytes } from "../lib/format";
+import XIcon from "../icons/x.svg";
 
 interface AddTaskDialogProps {
   onClose: () => void;
@@ -48,6 +49,13 @@ const AddTaskDialog: Component<AddTaskDialogProps> = (props) => {
   const [headers, setHeaders] = createSignal<{ key: string; value: string }[]>(
     [],
   );
+
+  // 任务独立配置
+  const [proxy, setProxy] = createSignal("");
+  const [maxConcurrent, setMaxConcurrent] = createSignal("");
+  const [chunkSize, setChunkSize] = createSignal("");
+  const [timeout, setTimeout] = createSignal("");
+  const [userAgent, setUserAgent] = createSignal("");
 
   // BT：文件选择
   const [torrentFiles, setTorrentFiles] = createSignal<TorrentFileInfo[]>([]);
@@ -178,6 +186,30 @@ const AddTaskDialog: Component<AddTaskDialogProps> = (props) => {
           }
           options.headers = headerMap;
         }
+      }
+
+      // 任务独立配置
+      const taskConfig: TaskConfig = {};
+      if (proxy().trim()) {
+        taskConfig.proxy = proxy().trim();
+      }
+      const mc = parseInt(maxConcurrent(), 10);
+      if (!isNaN(mc) && mc > 0) {
+        taskConfig.max_concurrent = mc;
+      }
+      const cs = parseInt(chunkSize(), 10);
+      if (!isNaN(cs) && cs > 0) {
+        taskConfig.chunk_size = cs * 1024 * 1024; // MB → bytes
+      }
+      const to = parseInt(timeout(), 10);
+      if (!isNaN(to) && to > 0) {
+        taskConfig.timeout = to;
+      }
+      if (userAgent().trim()) {
+        taskConfig.user_agent = userAgent().trim();
+      }
+      if (Object.keys(taskConfig).length > 0) {
+        options.config = taskConfig;
       }
 
       await addTask(options as any);
@@ -394,7 +426,7 @@ const AddTaskDialog: Component<AddTaskDialogProps> = (props) => {
                             class="btn btn-ghost btn-xs btn-square"
                             onClick={() => removeHeader(index())}
                           >
-                            ✕
+                            <XIcon class="w-3.5 h-3.5" />
                           </button>
                         </div>
                       )}
@@ -402,6 +434,85 @@ const AddTaskDialog: Component<AddTaskDialogProps> = (props) => {
                   </div>
                 </div>
               </Show>
+
+              {/* 通用高级选项：任务独立配置 */}
+              <div class="form-control">
+                <label class="label">
+                  <span class="label-text text-xs text-base-content/60">
+                    代理（留空使用全局设置: {config.proxy || "无"}）
+                  </span>
+                </label>
+                <input
+                  type="text"
+                  class="input input-bordered input-sm w-full"
+                  placeholder="http://、socks5://..."
+                  value={proxy()}
+                  onInput={(e) => setProxy(e.currentTarget.value)}
+                />
+              </div>
+
+              <div class="grid grid-cols-3 gap-2">
+                <div class="form-control">
+                  <label class="label">
+                    <span class="label-text text-xs text-base-content/60">
+                      并发连接数
+                    </span>
+                  </label>
+                  <input
+                    type="number"
+                    class="input input-bordered input-sm w-full"
+                    placeholder={`${config.max_concurrent_downloads}`}
+                    value={maxConcurrent()}
+                    onInput={(e) => setMaxConcurrent(e.currentTarget.value)}
+                    min="1"
+                  />
+                </div>
+                <div class="form-control">
+                  <label class="label">
+                    <span class="label-text text-xs text-base-content/60">
+                      分块大小 (MB)
+                    </span>
+                  </label>
+                  <input
+                    type="number"
+                    class="input input-bordered input-sm w-full"
+                    placeholder={`${Math.round(config.chunk_size / 1024 / 1024)}`}
+                    value={chunkSize()}
+                    onInput={(e) => setChunkSize(e.currentTarget.value)}
+                    min="1"
+                  />
+                </div>
+                <div class="form-control">
+                  <label class="label">
+                    <span class="label-text text-xs text-base-content/60">
+                      超时 (秒)
+                    </span>
+                  </label>
+                  <input
+                    type="number"
+                    class="input input-bordered input-sm w-full"
+                    placeholder={`${config.timeout}`}
+                    value={timeout()}
+                    onInput={(e) => setTimeout(e.currentTarget.value)}
+                    min="1"
+                  />
+                </div>
+              </div>
+
+              <div class="form-control">
+                <label class="label">
+                  <span class="label-text text-xs text-base-content/60">
+                    User-Agent（留空使用全局设置: {config.user_agent}）
+                  </span>
+                </label>
+                <input
+                  type="text"
+                  class="input input-bordered input-sm w-full"
+                  placeholder={config.user_agent}
+                  value={userAgent()}
+                  onInput={(e) => setUserAgent(e.currentTarget.value)}
+                />
+              </div>
 
               {/* BT 高级选项：文件选择 */}
               <Show when={tab() === "bt"}>

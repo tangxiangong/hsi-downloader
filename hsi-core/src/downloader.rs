@@ -345,6 +345,22 @@ impl Hsi {
             .clone()
     }
 
+    /// 为任务构建有效配置（合并全局配置和任务独立覆盖）
+    fn effective_config_for_task(&self, task: &Task) -> Config {
+        self.runtime_config()
+            .with_task_overrides(&task.config, &task.headers)
+    }
+
+    /// 为任务构建 HTTP 客户端（代理不同时重建，否则复用全局客户端）
+    fn client_for_config(&self, effective: &Config) -> Client {
+        let global = self.runtime_config();
+        if effective.proxy != global.proxy || effective.timeout != global.timeout {
+            Self::build_client(effective).unwrap_or_else(|_| self.http_client())
+        } else {
+            self.http_client()
+        }
+    }
+
     pub async fn apply_runtime_config(
         &self,
         config: Config,
@@ -470,12 +486,14 @@ impl Hsi {
         dest: &str,
         event_tx: mpsc::Sender<ProgressEvent>,
         speed_limit: Option<u64>,
+        config: &Config,
+        client: &Client,
     ) -> Result<()> {
         let dest_path = PathBuf::from(dest);
         let state_path = storage::migrate_download_state_file(&dest_path).await?;
 
         let state = self
-            .get_or_create_state(url, &dest_path, &state_path)
+            .get_or_create_state(url, &dest_path, &state_path, config, client)
             .await?;
         let state = Arc::new(RwLock::new(state));
 
@@ -511,15 +529,33 @@ impl Hsi {
             .await?;
 
         if is_streaming {
-            self.download_streaming(state, url, &dest_path, &state_path, event_tx, speed_limit)
-                .await
+            self.download_streaming(
+                state,
+                url,
+                &dest_path,
+                &state_path,
+                event_tx,
+                speed_limit,
+                config,
+                client,
+            )
+            .await
         } else {
-            self.download_chunked(state, &dest_path, &state_path, event_tx, speed_limit)
-                .await
+            self.download_chunked(
+                state,
+                &dest_path,
+                &state_path,
+                event_tx,
+                speed_limit,
+                config,
+                client,
+            )
+            .await
         }
     }
 
     /// 流式下载（不需要 Content-Length）
+    #[allow(clippy::too_many_arguments)]
     async fn download_streaming(
         &self,
         state: Arc<tokio::sync::RwLock<DownloadState>>,
@@ -528,9 +564,9 @@ impl Hsi {
         state_path: &Path,
         event_tx: mpsc::Sender<ProgressEvent>,
         speed_limit: Option<u64>,
+        config: &Config,
+        client: &Client,
     ) -> Result<()> {
-        let client = self.http_client();
-        let config = self.runtime_config();
         {
             let mut state = state.write().await;
             state.downloaded = 0;
@@ -601,6 +637,7 @@ impl Hsi {
     }
 
     /// 分块下载（需要 Content-Length）
+    #[allow(clippy::too_many_arguments)]
     async fn download_chunked(
         &self,
         state: Arc<tokio::sync::RwLock<DownloadState>>,
@@ -608,9 +645,9 @@ impl Hsi {
         state_path: &Path,
         event_tx: mpsc::Sender<ProgressEvent>,
         speed_limit: Option<u64>,
+        config: &Config,
+        client: &Client,
     ) -> Result<()> {
-        let config = self.runtime_config();
-        let client = self.http_client();
         let semaphore = Arc::new(Semaphore::new(config.max_concurrent));
         let speed_limiter =
             speed_limit.map(|limit| Arc::new(RwLock::new(SpeedLimiter::new(limit))));
@@ -830,9 +867,12 @@ impl Hsi {
         }
     }
 
-    async fn probe_download_capability(&self, url: &str) -> Result<(Option<u64>, bool)> {
-        let client = self.http_client();
-        let config = self.runtime_config();
+    async fn probe_download_capability(
+        &self,
+        url: &str,
+        config: &Config,
+        client: &Client,
+    ) -> Result<(Option<u64>, bool)> {
         let mut request = client.head(url);
 
         for (key, value) in &config.headers {
@@ -872,8 +912,8 @@ impl Hsi {
         state_path: &Path,
         total_size: u64,
         existing_downloaded: u64,
+        config: &Config,
     ) -> Result<DownloadState> {
-        let config = self.runtime_config();
         let mut options = fs::OpenOptions::new();
         options.create(true).write(true);
         let file = options.open(dest).await?;
@@ -935,6 +975,8 @@ impl Hsi {
         url: &str,
         dest: &Path,
         state_path: &Path,
+        config: &Config,
+        client: &Client,
     ) -> Result<DownloadState> {
         if let Some(state) = DownloadState::load(state_path).await?
             && state.url == url
@@ -942,7 +984,8 @@ impl Hsi {
             if state.is_streaming {
                 let existing_downloaded =
                     Self::existing_downloaded_bytes(dest, state.downloaded).await?;
-                let (total_size, supports_range) = self.probe_download_capability(url).await?;
+                let (total_size, supports_range) =
+                    self.probe_download_capability(url, config, client).await?;
                 return match choose_download_plan(
                     total_size.or(state.total_size),
                     supports_range,
@@ -952,8 +995,15 @@ impl Hsi {
                         total_size,
                         resumed_bytes,
                     } => {
-                        self.build_chunked_state(url, dest, state_path, total_size, resumed_bytes)
-                            .await
+                        self.build_chunked_state(
+                            url,
+                            dest,
+                            state_path,
+                            total_size,
+                            resumed_bytes,
+                            config,
+                        )
+                        .await
                     }
                     DownloadPlan::Streaming {
                         total_size,
@@ -969,13 +1019,14 @@ impl Hsi {
         }
 
         let existing_downloaded = Self::existing_downloaded_bytes(dest, 0).await?;
-        let (total_size_opt, supports_range) = self.probe_download_capability(url).await?;
+        let (total_size_opt, supports_range) =
+            self.probe_download_capability(url, config, client).await?;
         match choose_download_plan(total_size_opt, supports_range, existing_downloaded) {
             DownloadPlan::Chunked {
                 total_size,
                 resumed_bytes,
             } => {
-                self.build_chunked_state(url, dest, state_path, total_size, resumed_bytes)
+                self.build_chunked_state(url, dest, state_path, total_size, resumed_bytes, config)
                     .await
             }
             DownloadPlan::Streaming {
@@ -1037,6 +1088,7 @@ impl Hsi {
             auto_rename_on_conflict: false,
             selected_files: None,
             headers: None,
+            config: Default::default(),
         })
         .await
     }
@@ -1087,6 +1139,7 @@ impl Hsi {
                 ..Default::default()
             }),
             chunk_progress: None,
+            config: options.config.clone(),
         };
 
         {
@@ -1168,6 +1221,10 @@ impl Hsi {
                 task_id: task_id.to_string(),
             }))
             .await;
+
+        // 构建该任务的有效配置和 HTTP 客户端
+        let effective_config = self.effective_config_for_task(&task);
+        let effective_client = self.client_for_config(&effective_config);
 
         let downloader = self.clone();
         let tasks = Arc::clone(&self.tasks);
@@ -1358,6 +1415,8 @@ impl Hsi {
                             task.dest.to_str().unwrap(),
                             tx,
                             task.speed_limit,
+                            &effective_config,
+                            &effective_client,
                         )
                         .await
                 }
@@ -1748,9 +1807,12 @@ mod tests {
             chunk_size: 100,
             ..Default::default()
         };
-
-        let (downloader, _) =
-            Hsi::with_config(config, 1, temp_file("queue-state"), BtConfig::default());
+        let (downloader, _) = Hsi::with_config(
+            config.clone(),
+            1,
+            temp_file("queue-state"),
+            BtConfig::default(),
+        );
         let state = downloader
             .build_chunked_state(
                 "https://example.com/file.bin",
@@ -1758,6 +1820,7 @@ mod tests {
                 &state_path,
                 1000,
                 250,
+                &config,
             )
             .await
             .expect("build chunked state");
@@ -1804,6 +1867,7 @@ mod tests {
                 },
                 bt_info: None,
                 chunk_progress: None,
+                config: Default::default(),
             }],
             created_at: 1,
             updated_at: 1,
@@ -1915,6 +1979,7 @@ mod tests {
                 },
                 bt_info: None,
                 chunk_progress: None,
+                config: Default::default(),
             },
         );
 
@@ -1984,6 +2049,7 @@ mod tests {
                 },
                 bt_info: None,
                 chunk_progress: None,
+                config: Default::default(),
             },
         );
 

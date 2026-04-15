@@ -691,6 +691,7 @@ impl App {
                 auto_rename_on_conflict: false,
                 selected_files: None,
                 headers: None,
+                config: Default::default(),
             })
             .await
         {

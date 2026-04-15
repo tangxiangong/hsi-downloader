@@ -43,6 +43,7 @@ pub use types::{
     QueueEvent,
     // 主要类型
     Task,
+    TaskConfig,
     TaskEvent,
     TaskPriority,
     // 枚举类型
